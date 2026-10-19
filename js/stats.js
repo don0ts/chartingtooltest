@@ -86,7 +86,7 @@ function rowHtml(id,label,r,cls){
 }
 function detailHtml(id,evs){
   let t='<table class="detail"><thead><tr>'
-    +'<th>#</th><th>Pitch Group</th><th>Velo</th><th>Location</th><th>Swing</th><th>Contact</th><th>Contact Quality</th><th>Batted Ball</th><th>PA Outcome</th></tr></thead><tbody>';
+    +'<th>#</th><th>Pitch Group</th><th>Velo</th><th>Location</th><th>Swing</th><th>Contact</th><th>Contact Quality</th><th>Batted Ball</th><th>Batted to</th><th>PA Outcome</th></tr></thead><tbody>';
   evs.forEach((e,i)=>{
     t+='<tr><td>'+(i+1)+'</td>'
       +'<td>'+(e.pitch_group?esc(PITCH_GROUP_LABEL[e.pitch_group]||e.pitch_group):'<span class="dim">--</span>')+'</td>'
@@ -96,6 +96,7 @@ function detailHtml(id,evs){
       +'<td>'+(evContact(e)?'<span class="chk">\u2713</span>':'<span class="dim">--</span>')+'</td>'
       +'<td>'+(e.contact_quality||'<span class="dim">--</span>')+'</td>'
       +'<td>'+(e.batted_ball?esc(TRAJ_LABEL[e.batted_ball]||e.batted_ball):'<span class="dim">--</span>')+'</td>'
+      +'<td>'+(e.batted_to?esc(e.batted_to):'<span class="dim">--</span>')+'</td>'
       +'<td>'+(e.pa_outcome||(Array.isArray(e.result)&&e.result.length?esc(e.result.join('/')):'')||'<span class="dim">--</span>')+'</td></tr>';
   });
   t+='</tbody></table>';

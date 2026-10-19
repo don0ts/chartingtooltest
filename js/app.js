@@ -659,13 +659,13 @@ function csvEscape(v){ v = String(v==null?'':v); if (/[",\n]/.test(v)) return '"
 function sanitizeEventName(name){ return String(name||'Event').trim().replace(/[^A-Za-z0-9_\-]+/g,'_').replace(/^_+|_+$/g,'') || 'Event'; }
 
 function buildGameCsv(sess){
-  const header = 'LOG_ID,TIMECODE_MS,PLAYER,PLAYER_ID,PITCHER,PITCHER_ID,PITCH_GROUP,VELO,LOCATION,IN_ZONE,SWING,CONTACT,CONTACT_QUALITY,BB_TYPE,PA_OUTCOME,PITCH_X,PITCH_Y,BAD_DATA';
-  const rows = sess.events.map(e => [e.id, e.timecode_ms, e.player, (e.player_id||playerIdFor(sess,e.player)), e.pitcher, (e.pitcher_id||playerIdFor(sess,e.pitcher)), (e.pitch_group||''), (e.velo||''), (LOC_LABEL[e.location]||(e.inzone?'In Zone':'Out of Zone')), (e.inzone?'Y':'N'), (e.swing||''), (evContact(e)?'Y':'N'), (e.contact_quality||''), (e.batted_ball||''), (e.pa_outcome||e.play||(Array.isArray(e.result)&&e.result.length?e.result.join('/'):'')||''), (e.pitch_x!=null?Number(e.pitch_x).toFixed(1):''), (e.pitch_y!=null?Number(e.pitch_y).toFixed(1):''), (e.bad_data||'NO')].map(csvEscape).join(','));
+  const header = 'LOG_ID,TIMECODE_MS,PLAYER,PLAYER_ID,PITCHER,PITCHER_ID,PITCH_GROUP,VELO,LOCATION,IN_ZONE,SWING,CONTACT,CONTACT_QUALITY,BB_TYPE,BATTED_TO,PA_OUTCOME,PITCH_X,PITCH_Y,BAD_DATA';
+  const rows = sess.events.map(e => [e.id, e.timecode_ms, e.player, (e.player_id||playerIdFor(sess,e.player)), e.pitcher, (e.pitcher_id||playerIdFor(sess,e.pitcher)), (e.pitch_group||''), (e.velo||''), (LOC_LABEL[e.location]||(e.inzone?'In Zone':'Out of Zone')), (e.inzone?'Y':'N'), (e.swing||''), (evContact(e)?'Y':'N'), (e.contact_quality||''), (e.batted_ball||''), (e.batted_to||''), (e.pa_outcome||e.play||(Array.isArray(e.result)&&e.result.length?e.result.join('/'):'')||''), (e.pitch_x!=null?Number(e.pitch_x).toFixed(1):''), (e.pitch_y!=null?Number(e.pitch_y).toFixed(1):''), (e.bad_data||'NO')].map(csvEscape).join(','));
   return header + '\n' + rows.join('\n') + (rows.length?'\n':'');
 }
 function buildPlaysCsv(sess){
-  const header = 'LOG_ID,TIMECODE_MS,PLAYER,PLAYER_ID,PITCHER,PITCHER_ID,PITCH_GROUP,VELO,LOCATION,IN_ZONE,SWING,CONTACT,CONTACT_QUALITY,BB_TYPE,PA_OUTCOME,PITCH_X,PITCH_Y,BAD_DATA';
-  const rows = sess.events.filter(e => e.pa_outcome || e.play || (Array.isArray(e.result)&&e.result.length)).map(e => [e.id, e.timecode_ms, e.player, (e.player_id||playerIdFor(sess,e.player)), e.pitcher, (e.pitcher_id||playerIdFor(sess,e.pitcher)), (e.pitch_group||''), (e.velo||''), (LOC_LABEL[e.location]||(e.inzone?'In Zone':'Out of Zone')), (e.inzone?'Y':'N'), (e.swing||''), (evContact(e)?'Y':'N'), (e.contact_quality||''), (e.batted_ball||''), (e.pa_outcome||e.play||(Array.isArray(e.result)&&e.result.length?e.result.join('/'):'')||''), (e.pitch_x!=null?Number(e.pitch_x).toFixed(1):''), (e.pitch_y!=null?Number(e.pitch_y).toFixed(1):''), (e.bad_data||'NO')].map(csvEscape).join(','));
+  const header = 'LOG_ID,TIMECODE_MS,PLAYER,PLAYER_ID,PITCHER,PITCHER_ID,PITCH_GROUP,VELO,LOCATION,IN_ZONE,SWING,CONTACT,CONTACT_QUALITY,BB_TYPE,BATTED_TO,PA_OUTCOME,PITCH_X,PITCH_Y,BAD_DATA';
+  const rows = sess.events.filter(e => e.pa_outcome || e.play || (Array.isArray(e.result)&&e.result.length)).map(e => [e.id, e.timecode_ms, e.player, (e.player_id||playerIdFor(sess,e.player)), e.pitcher, (e.pitcher_id||playerIdFor(sess,e.pitcher)), (e.pitch_group||''), (e.velo||''), (LOC_LABEL[e.location]||(e.inzone?'In Zone':'Out of Zone')), (e.inzone?'Y':'N'), (e.swing||''), (evContact(e)?'Y':'N'), (e.contact_quality||''), (e.batted_ball||''), (e.batted_to||''), (e.pa_outcome||e.play||(Array.isArray(e.result)&&e.result.length?e.result.join('/'):'')||''), (e.pitch_x!=null?Number(e.pitch_x).toFixed(1):''), (e.pitch_y!=null?Number(e.pitch_y).toFixed(1):''), (e.bad_data||'NO')].map(csvEscape).join(','));
   return header + '\n' + rows.join('\n') + (rows.length?'\n':'');
 }
 function buildDefenseCsv(sess, group){
@@ -1146,10 +1146,8 @@ function pitchInfoStr(ev){
   return parts.join(' \u00b7 ');
 }
 function liveStartIndex(evs){
-  let lastPlay=-1, prevPlay=-1;
-  for (let i=0;i<evs.length;i++){ if (evIsPlay(evs[i])){ prevPlay=lastPlay; lastPlay=i; } }
-  if (lastPlay===-1) return 0;
-  if (lastPlay===evs.length-1) return prevPlay+1;
+  let lastPlay=-1;
+  for (let i=0;i<evs.length;i++){ if (evIsPlay(evs[i])) lastPlay=i; }
   return lastPlay+1;
 }
 function circleClass(ev){
@@ -1185,7 +1183,10 @@ function renderStrikeZone(){
     c.className='sz-circle '+circleClass(e)+(i===shown.length-1?' latest':'');
     c.style.left=e.pitch_x+'%'; c.style.top=e.pitch_y+'%';
     c.dataset.idx=o.idx;
-    c.title=pitchInfoStr(e);
+    const info=pitchInfoStr(e); c.dataset.info=info; c.setAttribute('aria-label',info);
+    c.addEventListener('mouseenter', (me)=> showSzTip(info, me));
+    c.addEventListener('mousemove', moveSzTip);
+    c.addEventListener('mouseleave', hideSzTip);
     const num=document.createElement('span'); num.className='sz-num'; num.textContent=String(i+1); c.appendChild(num);
     szArea.appendChild(c);
     if (e.ball_strike==='Ball') balls++; else if (e.ball_strike==='Strike') strikes++;
@@ -1193,23 +1194,37 @@ function renderStrikeZone(){
   if (szCount) szCount.textContent='Balls: '+balls+' \u00b7 Strikes: '+strikes;
 }
 
+/* ----- instant strike-zone hover tooltip ----- */
+let _szTip=null;
+function szTipEl(){ if(!_szTip){ _szTip=document.createElement('div'); _szTip.className='sz-tip'; _szTip.style.display='none'; document.body.appendChild(_szTip); } return _szTip; }
+function showSzTip(text, e){ const t=szTipEl(); t.textContent=text; t.style.display='block'; moveSzTip(e); }
+function moveSzTip(e){ const t=_szTip; if(!t||t.style.display==='none') return; let x=e.clientX+12, y=e.clientY+12; const w=t.offsetWidth, h=t.offsetHeight; if(x+w>window.innerWidth-6) x=e.clientX-w-12; if(y+h>window.innerHeight-6) y=e.clientY-h-12; t.style.left=x+'px'; t.style.top=y+'px'; }
+function hideSzTip(){ if(_szTip) _szTip.style.display='none'; }
+
 /* ----- pitch classification pickers ----- */
 function veloOptions(sel){ let o=''; for(let v=VELO_MIN;v<=VELO_MAX;v++){ o+='<option value="'+v+'"'+(String(v)===String(sel)?' selected':'')+'>'+v+'</option>'; } return o; }
 async function pitchGroupVeloModal(ev){
   let chosen = ev.pitch_group || 'FB';
   const curV = ev.velo || 85;
+  const startNoVelo = (ev.velo==='' || ev.velo==null) && !!ev.pitch_group;
   const html = '<div class="sect-lbl">Pitch Group</div>'
     + '<div class="grp-checks">'
     + PITCH_GROUPS.map(g=>'<label class="grp-check"><input type="checkbox" name="pg" value="'+g+'"'+(g===chosen?' checked':'')+'/> '+PITCH_GROUP_LABEL[g]+'</label>').join('')
     + '</div>'
-    + '<div class="velo-row"><label>Velo (mph)</label><select id="velo-sel">'+veloOptions(curV)+'</select></div>';
+    + '<div class="velo-row"><label>Velo (mph)</label><select id="velo-sel">'+veloOptions(curV)+'</select></div>'
+    + '<label class="no-velo"><input type="checkbox" id="no-velo"'+(startNoVelo?' checked':'')+'/> No Velo Registered</label>';
   const p = showModal({ title:'Pitch Group & Velo', html, buttons:[{label:'Next',value:'next',className:'btn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
   const boxes = Array.from(modalRoot.querySelectorAll('input[name=pg]'));
   boxes.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ chosen=b.value; boxes.forEach(o=>{ if(o!==b) o.checked=false; }); } else { chosen=''; } }));
+  const veloSel = $('velo-sel');
+  const noVeloBox = $('no-velo');
+  function syncVelo(){ const off=noVeloBox.checked; veloSel.disabled=off; const vr=veloSel.closest('.velo-row'); if(vr) vr.classList.toggle('velo-disabled', off); }
+  noVeloBox.addEventListener('change', syncVelo);
+  syncVelo();
   const res = await p;
   if (res!=='next') return null;
   if (!chosen){ const ck=modalRoot.querySelector('input[name=pg]:checked'); chosen = ck?ck.value:'FB'; }
-  const velo = parseInt($('velo-sel').value,10);
+  const velo = noVeloBox.checked ? '' : parseInt(veloSel.value,10);
   return { group:chosen, velo:velo };
 }
 async function locationSwingModal(ev, geomInzone){
@@ -1225,8 +1240,8 @@ async function locationSwingModal(ev, geomInzone){
     + '<div class="sect-lbl">Swing Outcome</div>'
     + '<div class="swing-row">'
     +   '<button type="button" class="pk swing-pick" data-sw="InPlay">InPlay</button>'
-    +   '<button type="button" class="pk swing-pick" data-sw="Whiff">Whiff</button>'
-    +   '<button type="button" class="pk swing-pick" data-sw="Take">Take</button>'
+    +   '<button type="button" class="pk swing-pick hollow" data-sw="Whiff">Whiff</button>'
+    +   '<button type="button" class="pk swing-pick hollow" data-sw="Take">Take</button>'
     +   '<button type="button" class="pk swing-pick" data-sw="Foul">Foul</button>'
     + '</div>'
     + '<div class="sect-lbl">Strike or Ball</div>'
@@ -1250,7 +1265,7 @@ async function locationSwingModal(ev, geomInzone){
     if (swingSel==='Take') return inzone?'Strike':'Ball';
     return 'Ball';
   }
-  function paintBS(){ bsBtns.forEach(b=> b.checked = (b.value===bs)); }
+  function paintBS(){ bsBtns.forEach(b=> b.checked = (b.value===bs)); const grayBall = (swingSel==='Whiff'||swingSel==='Foul'||swingSel==='InPlay'); bsBtns.forEach(b=>{ if(b.value==='Ball'){ b.disabled=grayBall; const lab=b.closest('label'); if(lab) lab.classList.toggle('bs-disabled', grayBall); } }); }
   function renderResult(){
     if (swingSel==='Whiff'||swingSel==='Take'){
       resultSect.style.display='block';
@@ -1289,17 +1304,32 @@ async function paOutcomeModal(ev){
 }
 async function contactModal(ev){
   const curQ = ev.contact_quality || 'Avg';
+  const curT = ev.batted_ball || '';
+  const curTo = ev.batted_to || '';
   const html = '<div class="sect-lbl">Contact Quality</div>'
     + '<div class="quality-checks">'
     + CONTACT_QUALITY.map(q=>'<label><input type="radio" name="cq" value="'+q+'"'+(q===curQ?' checked':'')+'/> '+q+'</label>').join('')
-    + '</div><div class="sect-lbl">Batted Ball Type</div>';
-  const buttons = TRAJECTORY.map(t=>({label:TRAJ_LABEL[t], value:'tr:'+t, className:'btn'}));
-  buttons.push({label:'Cancel', value:'cancel', className:'btn ghost', fullWidth:true});
-  const res = await showModal({ title:'Contact', html, buttons, gridCols:2, showBack:true });
+    + '</div>'
+    + '<div class="sect-lbl">Batted Ball Type</div>'
+    + '<div class="bb-checks">'
+    + TRAJECTORY.map(t=>'<label><input type="checkbox" name="bb" value="'+t+'"'+(t===curT?' checked':'')+'/> '+TRAJ_LABEL[t]+'</label>').join('')
+    + '</div>'
+    + '<div class="sect-lbl">Batted to</div>'
+    + '<div class="bto-checks">'
+    + ['1','2','3','4','5','6','7','8','9'].map(n=>'<label><input type="checkbox" name="bto" value="'+n+'"'+(n===curTo?' checked':'')+'/> '+n+'</label>').join('')
+    + '</div>';
+  const p = showModal({ title:'Contact', html, showBack:true, buttons:[{label:'Submit',value:'submit',className:'btn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
+  const bbBtns = Array.from(modalRoot.querySelectorAll('input[name=bb]'));
+  bbBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked) bbBtns.forEach(o=>{ if(o!==b) o.checked=false; }); }));
+  const btoBtns = Array.from(modalRoot.querySelectorAll('input[name=bto]'));
+  btoBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked) btoBtns.forEach(o=>{ if(o!==b) o.checked=false; }); }));
+  const res = await p;
   if (res==='__back__') return '__back__';
   if (res==='cancel' || res==null) return null;
-  const picked = modalRoot.querySelector('input[name=cq]:checked');
-  return { quality: picked?picked.value:'', traj: res.slice(3) };
+  const pickedQ = modalRoot.querySelector('input[name=cq]:checked');
+  const pickedBB = modalRoot.querySelector('input[name=bb]:checked');
+  const pickedTo = modalRoot.querySelector('input[name=bto]:checked');
+  return { quality: pickedQ?pickedQ.value:'', traj: pickedBB?pickedBB.value:'', batted_to: pickedTo?pickedTo.value:'' };
 }
 async function classifyPitch(ev, geomInzone){
   let step=0;
@@ -1314,9 +1344,9 @@ async function classifyPitch(ev, geomInzone){
       if(loc===null) return false;
       ev.location=loc.location; ev.swing=loc.swing; ev.ball_strike=loc.ball_strike||'';
       if(ev.swing==='Whiff' || ev.swing==='Take'){
-        ev.result = loc.result||[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.play=evPlayLabel(ev); return true;
+        ev.result = loc.result||[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.batted_to=''; ev.play=evPlayLabel(ev); return true;
       }
-      if(ev.swing==='Foul'){ ev.result=[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.play=evPlayLabel(ev); return true; }
+      if(ev.swing==='Foul'){ ev.result=[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.batted_to=''; ev.play=evPlayLabel(ev); return true; }
       ev.result=[]; step=2;
     } else if(step===2){
       const pa = await paOutcomeModal(ev);
@@ -1327,7 +1357,7 @@ async function classifyPitch(ev, geomInzone){
       const ct = await contactModal(ev);
       if(ct==='__back__'){ step=2; continue; }
       if(ct===null) return false;
-      ev.contact_quality=ct.quality; ev.batted_ball=ct.traj; return true;
+      ev.contact_quality=ct.quality; ev.batted_ball=ct.traj; ev.batted_to=ct.batted_to; return true;
     }
   }
 }
@@ -1351,7 +1381,7 @@ async function strikeZoneClick(e){
     player:team.selectedHitter||'', player_id:playerIdFor(sess,team.selectedHitter),
     pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess,team.selectedPitcher),
     pitch_x:px, pitch_y:py, inzone:inzone,
-    pitch_group:'', velo:'', location:(inzone?'InZone':'OutOfZone'), swing:'', pa_outcome:'', contact_quality:'', batted_ball:'',
+    pitch_group:'', velo:'', location:(inzone?'InZone':'OutOfZone'), swing:'', pa_outcome:'', contact_quality:'', batted_ball:'', batted_to:'',
     result:[], ball_strike:'', bad_data:'NO', notes:{}, contact:'', play:'' };
   sess.events.push(ev); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
   flashElement(floatStartBtn);
