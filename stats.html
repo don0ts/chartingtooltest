@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pitcher Stats</title>
+<link rel="stylesheet" href="css/stats.css" />
+</head>
+<body>
+<header>
+  <h1>PITCHER STATS</h1>
+  <span class="sub" id="event-note"></span>
+  <div class="spacer"></div>
+  <a class="navlink home" href="index.html">← Home</a>
+</header>
+
+<div class="wrap">
+  <div class="toolbar">
+    <div class="search">
+      <span style="color:var(--muted)">🔍</span>
+      <input type="text" id="search" placeholder="Search by pitcher name…" autocomplete="off" />
+    </div>
+    <span class="count-note" id="count-note"></span>
+    <button class="ghost" id="expand-all">Expand All</button>
+    <button class="ghost" id="collapse-all">Collapse All</button>
+    <button id="refresh">Refresh</button>
+  </div>
+
+  <div id="stats-root"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/stats.js"></script>
+</body>
+</html>
