@@ -1331,17 +1331,21 @@ async function contactModal(ev){
   const pickedTo = modalRoot.querySelector('input[name=bto]:checked');
   return { quality: pickedQ?pickedQ.value:'', traj: pickedBB?pickedBB.value:'', batted_to: pickedTo?pickedTo.value:'' };
 }
+async function confirmCancel(){
+  const res = await showModal({ title:'Cancel?', message:'Are you sure you want to cancel?', buttons:[{label:'Yes',value:true,className:'btn warn'},{label:'No',value:false,className:'btn hollow'}] });
+  return res===true;
+}
 async function classifyPitch(ev, geomInzone){
   let step=0;
   while(true){
     if(step===0){
       const pg = await pitchGroupVeloModal(ev);
-      if(pg===null) return false;
+      if(pg===null){ if(await confirmCancel()) return false; else continue; }
       ev.pitch_group=pg.group; ev.velo=pg.velo; step=1;
     } else if(step===1){
       const loc = await locationSwingModal(ev, geomInzone!=null?geomInzone:ev.inzone);
       if(loc==='__back__'){ step=0; continue; }
-      if(loc===null) return false;
+      if(loc===null){ if(await confirmCancel()) return false; else continue; }
       ev.location=loc.location; ev.swing=loc.swing; ev.ball_strike=loc.ball_strike||'';
       if(ev.swing==='Whiff' || ev.swing==='Take'){
         ev.result = loc.result||[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.batted_to=''; ev.play=evPlayLabel(ev); return true;
@@ -1351,12 +1355,12 @@ async function classifyPitch(ev, geomInzone){
     } else if(step===2){
       const pa = await paOutcomeModal(ev);
       if(pa==='__back__'){ step=1; continue; }
-      if(pa===null) return false;
+      if(pa===null){ if(await confirmCancel()) return false; else continue; }
       ev.pa_outcome=pa; ev.play=evPlayLabel(ev); step=3;
     } else {
       const ct = await contactModal(ev);
       if(ct==='__back__'){ step=2; continue; }
-      if(ct===null) return false;
+      if(ct===null){ if(await confirmCancel()) return false; else continue; }
       ev.contact_quality=ct.quality; ev.batted_ball=ct.traj; ev.batted_to=ct.batted_to; return true;
     }
   }
@@ -1385,7 +1389,13 @@ async function strikeZoneClick(e){
     result:[], ball_strike:'', bad_data:'NO', notes:{}, contact:'', play:'' };
   sess.events.push(ev); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
   flashElement(floatStartBtn);
-  await classifyPitch(ev, inzone);
+  const ok = await classifyPitch(ev, inzone);
+  if(!ok){
+    const i = sess.events.indexOf(ev);
+    if(i>=0) sess.events.splice(i,1);
+    saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
+    return;
+  }
   ev.contact = evContact(ev) ? (ev.contact||1) : '';
   ev.play = evPlayLabel(ev);
   saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();

@@ -51,6 +51,7 @@ body.floats-locked .float-log,body.floats-locked .float-contact,body.floats-lock
 button,.btn{padding:8px 10px;border-radius:8px;border:0;background:var(--accent);color:white;font-weight:600;font-size:13px;line-height:1;cursor:pointer}
 .btn.ghost{background:transparent;border:1px solid var(--soft-border);color:var(--muted)}
 .btn.warn{background:var(--danger)}
+.btn.hollow{background:transparent;border:1px solid var(--accent);color:var(--accent)}
 .btn.small{padding:6px 8px;font-size:13px;border-radius:8px}
 .pill{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.02);border:1px solid var(--soft-border);color:var(--muted);font-size:12px}
 
