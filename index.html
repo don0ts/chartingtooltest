@@ -113,7 +113,7 @@
                   <div class="zg zgh1"></div><div class="zg zgh2"></div>
                 </div>
               </div>
-              <div class="sz-hint">Grey circles mark recent pitches. In-zone = circle touches the box (edges included).</div>
+              <div id="sz-count" class="sz-count">Balls: 0 · Strikes: 0</div>
             </div>
           </div>
 
@@ -155,11 +155,6 @@
                 <div style="display:flex;justify-content:space-between;align-items:center">
                   <h3 style="margin:0;font-size:14px">Log</h3>
                   <div class="muted-note">Tap Options to edit or delete</div>
-                </div>
-                <div class="log-checkbox-row">
-                  <label><input type="checkbox" id="chk-pitch-log" checked /> Pitch Log</label>
-                  <label><input type="checkbox" id="chk-contact-log" /> Contact Log</label>
-                  <label><input type="checkbox" id="chk-play-log" /> Play Log</label>
                 </div>
                 <div class="log-list" id="log-list"></div>
               </div>
@@ -329,7 +324,6 @@
 
   <button id="float-log-btn" class="float-log" aria-label="Log">Log</button>
   <button id="float-contact-btn" class="float-contact" aria-label="Contact">Contact</button>
-  <button id="float-play-btn" class="float-play" aria-label="Play">Play</button>
   <button id="float-workout-btn" class="float-workout" aria-label="Workout Log">Log</button>
   <button id="float-start-btn" class="float-start" aria-label="Start Clock"><span class="fs-ico"></span></button>
 

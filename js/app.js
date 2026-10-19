@@ -251,13 +251,8 @@ const hittersList = $('hitters-list');
 const logList = $('log-list');
 const floatBtn = $('float-log-btn');
 const floatContactBtn = $('float-contact-btn');
-const floatPlayBtn = $('float-play-btn');
 const floatWorkoutBtn = $('float-workout-btn');
 const floatStartBtn = $('float-start-btn');
-
-const chkPitchLog = $('chk-pitch-log');
-const chkContactLog = $('chk-contact-log');
-const chkPlayLog = $('chk-play-log');
 
 const ofList = $('of-list'), ifList = $('if-list'), cList = $('c-list'), bpList = $('bp-list');
 const defenseLogList = $('defense-log-list'), bpLogList = $('bp-log-list');
@@ -412,15 +407,8 @@ function renderLog(){
   logList.innerHTML = '';
   if (!sess) return;
   ensureSessionCounters(sess);
-  const showPitch = !chkPitchLog || chkPitchLog.checked;
-  const showContact = chkContactLog && chkContactLog.checked;
-  const showPlay = chkPlayLog && chkPlayLog.checked;
   sess.events.slice().reverse().forEach((ev, revIdx) => {
     const idx = sess.events.length - 1 - revIdx;
-    const isContact = evContact(ev);
-    const isPlay = !!ev.pa_outcome;
-    // filter: Pitch Log shows all; Contact/Play narrow to those kinds
-    if (!showPitch){ if (showContact && isContact){} else if (showPlay && isPlay){} else return; }
     const item = document.createElement('div'); item.className = 'log-item';
     const left = document.createElement('div'); left.className = 'log-left';
     const main = document.createElement('div'); main.textContent = '#'+ev.id+' \u2014 '+msToLabel(ev.timecode_ms); main.style.fontWeight='700';
@@ -428,12 +416,13 @@ function renderLog(){
     let metaText = (ev.player||'')+' vs '+(ev.pitcher||'');
     const cls=[];
     if (ev.pitch_group) cls.push(ev.pitch_group+(ev.velo?(' '+ev.velo):''));
-    cls.push(ev.inzone?'In Zone':'Out of Zone');
-    if (ev.swing) cls.push(ev.swing);
-    if (ev.pa_outcome) cls.push('PA:'+ev.pa_outcome);
+    if (ev.ball_strike) cls.push(ev.ball_strike);
+    if (ev.swing && ev.swing!=='InPlay') cls.push(ev.swing);
+    const pl=evPlayLabel(ev); if (pl) cls.push('Play: '+pl);
     if (ev.contact_quality) cls.push(ev.contact_quality);
     if (ev.batted_ball) cls.push(ev.batted_ball);
-    metaText += '  \u00b7  '+cls.join(' \u00b7 ');
+    if (ev.location && LOC_LABEL[ev.location]) cls.push(LOC_LABEL[ev.location]);
+    if (cls.length) metaText += '  \u00b7  '+cls.join(' \u00b7 ');
     meta.textContent = metaText;
     left.appendChild(main); left.appendChild(meta);
     const actions = document.createElement('div');
@@ -452,9 +441,9 @@ async function openOptionsModal(index){
   const allPitchers = Array.from(new Set(sess.teams.top.pitchers.concat(sess.teams.bot.pitchers)));
   const summary = [
     (ev.pitch_group?('Pitch: '+ev.pitch_group+(ev.velo?(' '+ev.velo+' mph'):'')):'Pitch: --'),
-    'Location: '+(LOC_LABEL[ev.location]||(ev.inzone?'In Zone':'Out of Zone')),
+    'Strike/Ball: '+(ev.ball_strike||'--'),
     'Swing: '+(ev.swing||'--'),
-    'PA Outcome: '+(ev.pa_outcome||'--'),
+    'Play: '+(evPlayLabel(ev)||'--'),
     'Contact Quality: '+(ev.contact_quality||'--'),
     'Batted Ball: '+(ev.batted_ball||'--')
   ].join('  \u00b7  ');
@@ -474,7 +463,7 @@ async function openOptionsModal(index){
     + '</div></div>';
   const res = await showModal({ title:'Options', html, buttons:[{label:'Save',value:'save',className:'btn'},{label:'Edit Play',value:'editplay',className:'btn'},{label:'Delete',value:'delete',className:'btn warn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
   if (res==='cancel' || !res) return;
-  if (res==='editplay'){ await classifyPitch(ev, ev.inzone); ev.contact = evContact(ev)?(ev.contact||1):''; ev.play = ev.pa_outcome||''; saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges(); return; }
+  if (res==='editplay'){ await classifyPitch(ev, ev.inzone); ev.contact = evContact(ev)?(ev.contact||1):''; ev.play = evPlayLabel(ev); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges(); return; }
   if (res==='delete'){ const c = await showModal({ title:'Delete entry?', message:'Delete this log entry?', buttons:[{label:'Delete',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if (!c) return; sess.events.splice(index,1); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges(); return; }
   if (res==='save'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; ev.player=hh; ev.pitcher=pp; ev.notes={late,early}; ev.bad_data=(late||early)?'YES':'FIX'; saveAll(); renderLog(); updatePitcherCountBadges(); return; }
 }
@@ -814,38 +803,6 @@ async function floatContactClicked(){
   sess.events.push(ev); saveAll(); renderLog(); updatePitcherCountBadges();
   flashElement(floatContactBtn); showToast('Contact #'+ev.contact+' - '+msToToastTime(ev.timecode_ms), 'contact');
 }
-async function floatPlayClicked(){
-  const sess=getCurrentSession(); if(!sess){ await showModal({title:'No session',message:'Create/select an event first.',buttons:[{label:'OK',value:true}]}); return; }
-  if (!(await ensureClockRunningOrAsk(sess))) return;
-  ensureSessionCounters(sess);
-  const team=sess.teams[state.currentSide];
-  // Send the log immediately, capturing the timecode at the moment Play is clicked.
-  const ev={ id:sess.nextId++, timecode_ms:Math.round(computeSessionElapsedMs(sess)), type:'', mph:'', player:team.selectedHitter||'', player_id:playerIdFor(sess, team.selectedHitter), pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess, team.selectedPitcher), bad_data:'NO', notes:{}, contact:'', play:'' };
-  sess.events.push(ev); saveAll(); renderLog(); updatePitcherCountBadges();
-  flashElement(floatPlayBtn); showToast('Play logged #'+ev.id+' - '+msToToastTime(ev.timecode_ms), 'play');
-  // Then show the pickers and fill this same log with what was picked.
-  // Step 1: result
-  const result = await pickerModal('Play result', ['1B','2B','3B','HR','OUT','E','BB','HBP','KS','KL']);
-  if (result===null) return;
-  // Results that don't need a fielder position or contact type.
-  const NO_DETAIL = ['BB','HBP','KS','KL'];
-  let playStr;
-  if (NO_DETAIL.includes(result)){
-    playStr = result;
-  } else {
-    // Step 2: fielder number
-    const num = await pickerModal('Fielder', ['1','2','3','4','5','6','7','8','9']);
-    if (num===null) return;
-    // Step 3: contact
-    const contactLabel = await pickerModal('Contact', ['Soft','Medium','Hard']);
-    if (contactLabel===null) return;
-    playStr = result+'_'+num+'_'+contactLabel.toUpperCase();
-  }
-  ev.play = playStr; saveAll(); renderLog(); updatePitcherCountBadges();
-  showToast('Play '+playStr+' - '+msToToastTime(ev.timecode_ms), 'play');
-}
-
-/* ===== WORKOUT float logging ===== */
 async function floatWorkoutClicked(){
   const sess=getCurrentSession(); if(!sess){ await showModal({title:'No session',message:'Create/select an event first.',buttons:[{label:'OK',value:true}]}); return; }
   ensureWorkout(sess);
@@ -943,7 +900,6 @@ function updateFloatingButtonVisibility(){
   // Game pitches are logged on the strike zone, so the Log/Contact/Play floats are retired.
   floatBtn.style.display = 'none';
   floatContactBtn.style.display = 'none';
-  floatPlayBtn.style.display = 'none';
   const isWorkout = state.activeTab==='workout';
   floatWorkoutBtn.style.display = isWorkout ? 'flex' : 'none';
   floatStartBtn.style.display = 'flex';
@@ -1000,7 +956,6 @@ function initDraggableFloat(btn, stateKey, defaultLeft, defaultBottom){
   btn.addEventListener('click', (e)=>{ if (suppressClick){ e.stopPropagation(); e.preventDefault(); return; }
     if (stateKey==='pitch') floatLogClicked();
     else if (stateKey==='contact') floatContactClicked();
-    else if (stateKey==='play') floatPlayClicked();
     else if (stateKey==='workout') floatWorkoutClicked();
     else if (stateKey==='start') floatStartClicked();
   });
@@ -1019,7 +974,6 @@ function initAllFloating(){
   if (floatState.size!=null && floatState.pitch.size==null){ floatState.pitch.size=floatState.size; }
   initDraggableFloat(floatBtn, 'pitch', 18, 18);
   initDraggableFloat(floatContactBtn, 'contact', 130, 18);
-  initDraggableFloat(floatPlayBtn, 'play', 242, 18);
   initDraggableFloat(floatWorkoutBtn, 'workout', 18, 18);
   initDraggableFloat(floatStartBtn, 'start', Math.max(18, window.innerWidth-76), 18);
   if (lockFloatsCheckbox){ lockFloatsCheckbox.checked = !!floatState.locked; }
@@ -1138,9 +1092,6 @@ if (sideTop && sideBot){ sideTop.addEventListener('click', ()=>{ state.currentSi
 startBtn.addEventListener('click', ()=>{ startClockCurrent(); renderClockButtons(); });
 pauseBtn.addEventListener('click', ()=>{ pauseClockCurrent().then(()=> renderClockButtons()); });
 resetBtn.addEventListener('click', ()=>{ resetClockCurrent().then(()=> renderClockButtons()); });
-chkPitchLog.addEventListener('change', ()=>{ updateFloatingButtonVisibility(); renderLog(); saveAll(); });
-chkContactLog.addEventListener('change', ()=>{ updateFloatingButtonVisibility(); renderLog(); saveAll(); });
-chkPlayLog.addEventListener('change', ()=>{ updateFloatingButtonVisibility(); renderLog(); saveAll(); });
 
 /* ===== render all + init ===== */
 function renderAll(){
@@ -1158,13 +1109,14 @@ function renderAll(){
 const szArea = $('sz-area');
 const szZone = $('sz-zone');
 const szStatus = $('sz-status');
+const szCount = $('sz-count');
 const activePitcherSel = $('active-pitcher');
 const activeHitterSel = $('active-hitter');
 
 const PITCH_GROUPS = ['FB','BB','OS'];
 const PITCH_GROUP_LABEL = {FB:'Fastball', BB:'Breaking Ball', OS:'OffSpeed'};
 const VELO_MIN = 60, VELO_MAX = 115;
-const LOC_OPTS = [['InZone','In Zone'],['OutOfZone','Out of Zone'],['NonComp','Non-Competitive'],['IntBall','Intentional Ball']];
+const LOC_OPTS = [['NonComp','Non-Competitive'],['IntBall','Intentional Ball']];
 const LOC_LABEL = {InZone:'In Zone', OutOfZone:'Out of Zone', NonComp:'Non-Competitive', IntBall:'Intentional Ball'};
 const SWING_OPTS = ['InPlay','Whiff','Take','Foul'];
 const PA_OUTCOMES = ['1B','2B','3B','HR','OUT','FC','E','DP','SAC','SACF'];
@@ -1177,6 +1129,36 @@ const TRAJ_LABEL = {GB:'Groundball', LD:'Linedrive', FB:'Flyball', PU:'Popup'};
 
 function evSwing(ev){ return ev && (ev.swing==='InPlay'||ev.swing==='Whiff'||ev.swing==='Foul'); }
 function evContact(ev){ return ev && (ev.swing==='InPlay'||ev.swing==='Foul'); }
+function evPlayLabel(ev){
+  if (!ev) return '';
+  if (ev.pa_outcome) return ev.pa_outcome;
+  if (Array.isArray(ev.result) && ev.result.length) return ev.result.join('/');
+  return '';
+}
+function evIsPlay(ev){ return !!evPlayLabel(ev); }
+function pitchInfoStr(ev){
+  const parts=[];
+  if (ev.pitch_group) parts.push(ev.pitch_group+(ev.velo?(' '+ev.velo):''));
+  if (ev.swing && ev.swing!=='InPlay') parts.push(ev.swing);
+  const pl=evPlayLabel(ev); if (pl) parts.push('Play: '+pl);
+  if (ev.contact_quality) parts.push(ev.contact_quality);
+  if (ev.batted_ball) parts.push(ev.batted_ball);
+  return parts.join(' \u00b7 ');
+}
+function liveStartIndex(evs){
+  let lastPlay=-1, prevPlay=-1;
+  for (let i=0;i<evs.length;i++){ if (evIsPlay(evs[i])){ prevPlay=lastPlay; lastPlay=i; } }
+  if (lastPlay===-1) return 0;
+  if (lastPlay===evs.length-1) return prevPlay+1;
+  return lastPlay+1;
+}
+function circleClass(ev){
+  if (ev.swing==='Whiff') return 'c-whiff';
+  if (ev.swing==='Foul') return 'c-foul';
+  if (ev.swing==='InPlay') return 'c-inplay';
+  if (ev.ball_strike==='Strike') return 'c-cstrike';
+  return 'c-ball';
+}
 
 /* ----- active matchup selects ----- */
 function renderActiveSelects(){
@@ -1195,20 +1177,20 @@ function renderStrikeZone(){
   if (!szArea) return;
   szArea.querySelectorAll('.sz-circle').forEach(c=>c.remove());
   const sess=getCurrentSession();
-  const evs = sess ? sess.events.filter(e=> e.pitch_x!=null && e.pitch_y!=null) : [];
-  evs.forEach((e,i)=>{ const c=document.createElement('div'); let cls='sz-circle'; let whiff=false;
-    if (e.swing==='InPlay') cls+=' c-inplay';
-    else if (e.swing==='Whiff'){ cls+=' c-whiff'; whiff=true; }
-    else if (e.inzone) cls+=' c-inzone';
-    else cls+=' c-outzone';
-    if (i===evs.length-1) cls+=' latest';
-    c.className=cls; c.style.left=e.pitch_x+'%'; c.style.top=e.pitch_y+'%';
-    if (whiff){ const x=document.createElement('span'); x.className='sz-x'; x.textContent='\u2715'; c.appendChild(x); }
-    szArea.appendChild(c); });
-  if (szStatus){
-    if (evs.length){ const last=evs[evs.length-1]; szStatus.textContent = last.inzone?'In Zone':'Out of Zone'; szStatus.className='sz-status '+(last.inzone?'inzone':'outzone'); }
-    else { szStatus.textContent='Click a pitch location'; szStatus.className='sz-status'; }
-  }
+  const allPitch = sess ? sess.events.map((e,idx)=>({e:e,idx:idx})).filter(o=> o.e.pitch_x!=null && o.e.pitch_y!=null) : [];
+  const start = liveStartIndex(allPitch.map(o=>o.e));
+  const shown = allPitch.slice(start);
+  let balls=0, strikes=0;
+  shown.forEach((o,i)=>{ const e=o.e; const c=document.createElement('div');
+    c.className='sz-circle '+circleClass(e)+(i===shown.length-1?' latest':'');
+    c.style.left=e.pitch_x+'%'; c.style.top=e.pitch_y+'%';
+    c.dataset.idx=o.idx;
+    c.title=pitchInfoStr(e);
+    const num=document.createElement('span'); num.className='sz-num'; num.textContent=String(i+1); c.appendChild(num);
+    szArea.appendChild(c);
+    if (e.ball_strike==='Ball') balls++; else if (e.ball_strike==='Strike') strikes++;
+  });
+  if (szCount) szCount.textContent='Balls: '+balls+' \u00b7 Strikes: '+strikes;
 }
 
 /* ----- pitch classification pickers ----- */
@@ -1231,42 +1213,72 @@ async function pitchGroupVeloModal(ev){
   return { group:chosen, velo:velo };
 }
 async function locationSwingModal(ev, geomInzone){
-  const cur = ev.location || (geomInzone?'InZone':'OutOfZone');
-  let wtSwing = (ev.swing==='Whiff'||ev.swing==='Take') ? ev.swing : '';
-  const html = '<div class="sect-lbl">Location</div>'
+  const inzone = (geomInzone!=null?geomInzone:ev.inzone);
+  const extraCur = (ev.location==='NonComp'||ev.location==='IntBall') ? ev.location : '';
+  let swingSel = (ev.swing==='InPlay'||ev.swing==='Whiff'||ev.swing==='Take'||ev.swing==='Foul') ? ev.swing : '';
+  let bs = ev.ball_strike || '';
+  let bsManual = !!ev.ball_strike;
+  const html = '<div class="sect-lbl">Extra Info</div>'
     + '<div class="loc-checks">'
-    + LOC_OPTS.map(o=>'<label><input type="radio" name="locr" value="'+o[0]+'"'+(o[0]===cur?' checked':'')+'/> '+o[1]+'</label>').join('')
-    + '</div><div class="sect-lbl">Swing Outcome</div>'
+    + LOC_OPTS.map(o=>'<label><input type="checkbox" name="locx" value="'+o[0]+'"'+(o[0]===extraCur?' checked':'')+'/> '+o[1]+'</label>').join('')
+    + '</div>'
+    + '<div class="sect-lbl">Swing Outcome</div>'
     + '<div class="swing-row">'
-    +   '<button type="button" class="pk swing-pick" data-resolve="sw:InPlay">InPlay</button>'
-    +   '<button type="button" class="pk swing-pick hollow" data-wt="Whiff">Whiff</button>'
-    +   '<button type="button" class="pk swing-pick hollow" data-wt="Take">Take</button>'
-    +   '<button type="button" class="pk swing-pick" data-resolve="sw:Foul">Foul</button>'
+    +   '<button type="button" class="pk swing-pick" data-sw="InPlay">InPlay</button>'
+    +   '<button type="button" class="pk swing-pick" data-sw="Whiff">Whiff</button>'
+    +   '<button type="button" class="pk swing-pick" data-sw="Take">Take</button>'
+    +   '<button type="button" class="pk swing-pick" data-sw="Foul">Foul</button>'
+    + '</div>'
+    + '<div class="sect-lbl">Strike or Ball</div>'
+    + '<div class="bs-checks">'
+    +   '<label><input type="checkbox" name="bs" value="Strike"/> Strike</label>'
+    +   '<label><input type="checkbox" name="bs" value="Ball"/> Ball</label>'
     + '</div>'
     + '<div class="result-sect" id="result-sect" style="display:none">'
     +   '<div class="sect-lbl">Result</div>'
-    +   '<div class="result-checks">'
-    +     RESULT_FLAGS.map(r=>'<label><input type="checkbox" name="resr" value="'+r+'"/> '+r+'</label>').join('')
-    +   '</div>'
-    +   '<button type="button" class="pk result-submit" data-resolve="submit">Submit</button>'
-    + '</div>';
-  const p = showModal({ title:'Location & Swing', html, showBack:true, buttons:[{label:'Cancel',value:'cancel',className:'btn ghost',fullWidth:true}] });
-  const wtBtns = Array.from(modalRoot.querySelectorAll('[data-wt]'));
+    +   '<div class="result-checks" id="result-checks"></div>'
+    + '</div>'
+    + '<button type="button" class="pk result-submit" data-resolve="submit">Submit</button>';
+  const p = showModal({ title:'Pitch Info', html, showBack:true, buttons:[{label:'Cancel',value:'cancel',className:'btn ghost',fullWidth:true}] });
+  const swBtns = Array.from(modalRoot.querySelectorAll('[data-sw]'));
+  const bsBtns = Array.from(modalRoot.querySelectorAll('input[name=bs]'));
+  const locxBtns = Array.from(modalRoot.querySelectorAll('input[name=locx]'));
   const resultSect = modalRoot.querySelector('#result-sect');
-  function paintWT(){ wtBtns.forEach(b=> b.classList.toggle('selected', b.getAttribute('data-wt')===wtSwing)); if(resultSect) resultSect.style.display = wtSwing?'block':'none'; }
-  wtBtns.forEach(b=> b.addEventListener('click', ()=>{ wtSwing=b.getAttribute('data-wt'); paintWT(); }));
-  (ev.result||[]).forEach(r=>{ const cb=modalRoot.querySelector('input[name=resr][value="'+r+'"]'); if(cb) cb.checked=true; });
-  paintWT();
+  const resultChecks = modalRoot.querySelector('#result-checks');
+  function defaultBS(){
+    if (swingSel==='Whiff'||swingSel==='Foul'||swingSel==='InPlay') return 'Strike';
+    if (swingSel==='Take') return inzone?'Strike':'Ball';
+    return 'Ball';
+  }
+  function paintBS(){ bsBtns.forEach(b=> b.checked = (b.value===bs)); }
+  function renderResult(){
+    if (swingSel==='Whiff'||swingSel==='Take'){
+      resultSect.style.display='block';
+      const flags = swingSel==='Whiff' ? ['K'] : ['K','BB','HBP','iBB'];
+      resultChecks.innerHTML = flags.map(r=>'<label><input type="checkbox" name="resr" value="'+r+'"/> '+r+'</label>').join('');
+      (ev.result||[]).forEach(r=>{ const cb=resultChecks.querySelector('input[name=resr][value="'+r+'"]'); if(cb) cb.checked=true; });
+    } else { resultSect.style.display='none'; resultChecks.innerHTML=''; }
+  }
+  function paintSwing(){ swBtns.forEach(b=> b.classList.toggle('selected', b.getAttribute('data-sw')===swingSel)); if(!bsManual){ bs=defaultBS(); } paintBS(); renderResult(); }
+  swBtns.forEach(b=> b.addEventListener('click', ()=>{ swingSel=b.getAttribute('data-sw'); paintSwing(); }));
+  bsBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ bs=b.value; bsManual=true; bsBtns.forEach(o=>{ if(o!==b) o.checked=false; }); } else { bs=''; bsManual=true; } }));
+  locxBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ locxBtns.forEach(o=>{ if(o!==b) o.checked=false; }); } }));
+  if (swingSel){ paintSwing(); } else { paintBS(); }
   const res = await p;
   if (res==='__back__') return '__back__';
   if (res==='cancel' || res==null) return null;
-  const picked = modalRoot.querySelector('input[name=locr]:checked');
-  const loc = picked ? picked.value : cur;
-  if (res==='submit'){
-    const result = Array.from(modalRoot.querySelectorAll('input[name=resr]:checked')).map(c=>c.value);
-    return { location:loc, swing:(wtSwing||'Take'), result:result };
+  const picked = modalRoot.querySelector('input[name=locx]:checked');
+  const loc = picked ? picked.value : (inzone?'InZone':'OutOfZone');
+  const result = Array.from(modalRoot.querySelectorAll('input[name=resr]:checked')).map(c=>c.value);
+  const finalSwing = swingSel || 'Take';
+  let finalBS = bs;
+  if (!finalBS){
+    if (finalSwing==='Whiff'||finalSwing==='Foul'||finalSwing==='InPlay') finalBS='Strike';
+    else if (finalSwing==='Take') finalBS=inzone?'Strike':'Ball';
+    else finalBS='Ball';
   }
-  return { location:loc, swing:res.slice(3), result:[] };
+  const resultOut = (finalSwing==='Whiff'||finalSwing==='Take') ? result : [];
+  return { location:loc, swing:finalSwing, result:resultOut, ball_strike:finalBS };
 }
 async function paOutcomeModal(ev){
   const buttons = PA_OUTCOMES.map(o => ({ label:o, value:o, className:'btn' }));
@@ -1300,17 +1312,17 @@ async function classifyPitch(ev, geomInzone){
       const loc = await locationSwingModal(ev, geomInzone!=null?geomInzone:ev.inzone);
       if(loc==='__back__'){ step=0; continue; }
       if(loc===null) return false;
-      ev.location=loc.location; ev.swing=loc.swing;
+      ev.location=loc.location; ev.swing=loc.swing; ev.ball_strike=loc.ball_strike||'';
       if(ev.swing==='Whiff' || ev.swing==='Take'){
-        ev.result = loc.result||[]; ev.pa_outcome=''; ev.play=''; ev.contact_quality=''; ev.batted_ball=''; return true;
+        ev.result = loc.result||[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.play=evPlayLabel(ev); return true;
       }
-      if(ev.swing==='Foul'){ ev.result=[]; ev.pa_outcome=''; ev.play=''; ev.contact_quality=''; ev.batted_ball=''; return true; }
+      if(ev.swing==='Foul'){ ev.result=[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.play=evPlayLabel(ev); return true; }
       ev.result=[]; step=2;
     } else if(step===2){
       const pa = await paOutcomeModal(ev);
       if(pa==='__back__'){ step=1; continue; }
       if(pa===null) return false;
-      ev.pa_outcome=pa; ev.play=pa; step=3;
+      ev.pa_outcome=pa; ev.play=evPlayLabel(ev); step=3;
     } else {
       const ct = await contactModal(ev);
       if(ct==='__back__'){ step=2; continue; }
@@ -1340,15 +1352,16 @@ async function strikeZoneClick(e){
     pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess,team.selectedPitcher),
     pitch_x:px, pitch_y:py, inzone:inzone,
     pitch_group:'', velo:'', location:(inzone?'InZone':'OutOfZone'), swing:'', pa_outcome:'', contact_quality:'', batted_ball:'',
-    result:[], bad_data:'NO', notes:{}, contact:'', play:'' };
+    result:[], ball_strike:'', bad_data:'NO', notes:{}, contact:'', play:'' };
   sess.events.push(ev); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
   flashElement(floatStartBtn);
   await classifyPitch(ev, inzone);
   ev.contact = evContact(ev) ? (ev.contact||1) : '';
+  ev.play = evPlayLabel(ev);
   saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
   showToast('Pitch #'+ev.id+' '+(inzone?'(In Zone)':'(Out of Zone)')+' - '+msToToastTime(ev.timecode_ms));
 }
-if (szArea) szArea.addEventListener('click', (e)=>{ if (e.target.closest('.sz-circle')) return; strikeZoneClick(e); });
+if (szArea) szArea.addEventListener('click', (e)=>{ const circle=e.target.closest('.sz-circle'); if (circle){ const idx=parseInt(circle.dataset.idx,10); if(!isNaN(idx)) openOptionsModal(idx); return; } strikeZoneClick(e); });
 
 /* ===== Active Matchup quick-add (same behavior as the Players lineup add) ===== */
 const amAddPitcherInput = $('am-add-pitcher');
