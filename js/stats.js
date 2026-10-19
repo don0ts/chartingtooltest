@@ -1,9 +1,11 @@
-/* Standalone Pitcher Stats page. Reads the same local data the recorder saves. */
+/* Standalone Hitter Stats page. Reads the same local data the recorder saves. */
 const STORAGE_KEY = 'pitch_recorder_compact_v1';
 const $ = id => document.getElementById(id);
 
 const INPLAY_SET = ['1B','2B','3B','HR','OUT','FC','E','DP','SAC','SACF'];
 const LOC_LABEL = {InZone:'In Zone', OutOfZone:'Out of Zone', NonComp:'Non-Competitive', IntBall:'Intentional Ball'};
+const PITCH_GROUP_LABEL = {FB:'Fastball', BB:'Breaking Ball', OS:'OffSpeed'};
+const TRAJ_LABEL = {GB:'Groundball', LD:'Linedrive', FB:'Flyball', PU:'Popup'};
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function evSwing(e){ return e && (e.swing==='InPlay'||e.swing==='Whiff'||e.swing==='Foul'); }
@@ -17,13 +19,13 @@ function loadState(){
   catch(e){ return {sessions:[]}; }
 }
 
-/* pitcher -> { all:[events], dates:{ 'yyyy-mm-dd':[events] } } */
+/* hitter -> { all:[events], dates:{ 'yyyy-mm-dd':[events] } } */
 function gather(state){
   const map={};
   (state.sessions||[]).forEach(sess=>{
     const date=sess.date||'';
     (sess.events||[]).forEach(ev=>{
-      const p=ev.pitcher||''; if(!p) return;
+      const p=ev.player||''; if(!p) return;
       if(!map[p]) map[p]={all:[],dates:{}};
       map[p].all.push(ev);
       if(!map[p].dates[date]) map[p].dates[date]=[];
@@ -47,10 +49,11 @@ function computeRow(evs){
   const fb=bip.filter(e=> e.batted_ball==='FB').length;
   const pu=bip.filter(e=> e.batted_ball==='PU').length;
   const hard=bip.filter(e=> e.contact_quality==='Hard').length;
-  const pa=evs.filter(e=> e.pa_outcome);
+  const pa=evs.filter(e=> e.pa_outcome || (Array.isArray(e.result)&&e.result.length));
   const paN=pa.length;
-  const k=pa.filter(e=> e.pa_outcome==='K').length;
-  const bb=pa.filter(e=> e.pa_outcome==='BB'||e.pa_outcome==='iBB').length;
+  const hasRes=(e,f)=> Array.isArray(e.result)&&e.result.indexOf(f)>=0;
+  const k=pa.filter(e=> hasRes(e,'K')||e.pa_outcome==='K').length;
+  const bb=pa.filter(e=> hasRes(e,'BB')||hasRes(e,'iBB')||e.pa_outcome==='BB'||e.pa_outcome==='iBB').length;
   const hr=pa.filter(e=> e.pa_outcome==='HR').length;
   return { events:all,
     swing:fmtPct(swings,all), chase:fmtPct(oozSw,ooz.length), izwhiff:fmtPct(izWhiff,izSw.length),
@@ -86,14 +89,14 @@ function detailHtml(id,evs){
     +'<th>#</th><th>Pitch Group</th><th>Velo</th><th>Location</th><th>Swing</th><th>Contact</th><th>Contact Quality</th><th>Batted Ball</th><th>PA Outcome</th></tr></thead><tbody>';
   evs.forEach((e,i)=>{
     t+='<tr><td>'+(i+1)+'</td>'
-      +'<td>'+(e.pitch_group||'<span class="dim">--</span>')+'</td>'
+      +'<td>'+(e.pitch_group?esc(PITCH_GROUP_LABEL[e.pitch_group]||e.pitch_group):'<span class="dim">--</span>')+'</td>'
       +'<td>'+(e.velo||'<span class="dim">--</span>')+'</td>'
       +'<td>'+esc(locText(e))+'</td>'
       +'<td>'+(evSwing(e)?'<span class="chk">\u2713</span>':'<span class="dim">--</span>')+'</td>'
       +'<td>'+(evContact(e)?'<span class="chk">\u2713</span>':'<span class="dim">--</span>')+'</td>'
       +'<td>'+(e.contact_quality||'<span class="dim">--</span>')+'</td>'
-      +'<td>'+(e.batted_ball||'<span class="dim">--</span>')+'</td>'
-      +'<td>'+(e.pa_outcome||'<span class="dim">--</span>')+'</td></tr>';
+      +'<td>'+(e.batted_ball?esc(TRAJ_LABEL[e.batted_ball]||e.batted_ball):'<span class="dim">--</span>')+'</td>'
+      +'<td>'+(e.pa_outcome||(Array.isArray(e.result)&&e.result.length?esc(e.result.join('/')):'')||'<span class="dim">--</span>')+'</td></tr>';
   });
   t+='</tbody></table>';
   return '<tr class="detail" id="det_'+id+'" style="display:none"><td colspan="14"><div class="detail-wrap">'+t+'</div></td></tr>';
@@ -108,14 +111,14 @@ function render(){
   if(filterText){ const q=filterText.toLowerCase(); pitchers=pitchers.filter(p=> p.toLowerCase().indexOf(q)>=0); }
   const root=$('stats-root');
   const evTotal=(state.sessions||[]).reduce((n,s)=> n+((s.events||[]).length),0);
-  $('event-note').textContent = total? (total+' pitcher'+(total!==1?'s':'')+' \u2022 '+evTotal+' pitches logged') : '';
+  $('event-note').textContent = total? (total+' hitter'+(total!==1?'s':'')+' \u2022 '+evTotal+' pitches logged') : '';
   $('count-note').textContent = total? (pitchers.length+' of '+total+' shown') : '';
   if(!total){ root.innerHTML='<div class="status">No pitches logged yet. Open the recorder, log pitches on the strike zone, then come back here.</div>'; return; }
-  if(!pitchers.length){ root.innerHTML='<div class="status">No pitchers match \u201c'+esc(filterText)+'\u201d.</div>'; return; }
+  if(!pitchers.length){ root.innerHTML='<div class="status">No hitters match \u201c'+esc(filterText)+'\u201d.</div>'; return; }
   let html=''; let n=0;
   pitchers.forEach(p=>{
     const info=map[p];
-    html+='<div class="player-block"><div class="player-head"><span class="badge">P</span><span class="nm">'+esc(p)+'</span>'
+    html+='<div class="player-block"><div class="player-head"><span class="badge">B</span><span class="nm">'+esc(p)+'</span>'
       +'<span class="meta">'+info.all.length+' pitches</span></div><div class="tablewrap"><table class="stats">'+headHtml()+'<tbody>';
     const sid='s'+(n++);
     html+=rowHtml(sid,'Season',computeRow(info.all),'season');

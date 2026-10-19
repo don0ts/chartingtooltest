@@ -314,3 +314,43 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
 @media(min-width:560px){.am-add-grid{flex-direction:row}.am-add-grid .add-row{flex:1}}
 a.nav-stats{text-decoration:none;display:inline-flex;align-items:center;gap:4px;background:linear-gradient(180deg,#6a4fd0,#4f9dff);color:#fff;font-weight:700}
 a.nav-stats:hover{filter:brightness(1.08)}
+
+/* ===== dark native select + option popups (fix white dropdown) ===== */
+select{background:var(--panel);color:#eaf6ff}
+select option, select optgroup{background:#0b1724;color:#eaf6ff}
+
+/* ===== pitch group checkboxes (full names) ===== */
+.grp-checks{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
+.grp-checks .grp-check{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:700;color:#eaf6ff;cursor:pointer;padding:12px 12px;border:1px solid var(--soft-border);border-radius:8px;flex:1;min-width:130px}
+.grp-checks input{accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+
+/* ===== swing outcome row ===== */
+.swing-row{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:6px 0 10px}
+.swing-pick{padding:14px 10px;font-size:15px}
+.swing-pick.selected{box-shadow:0 0 0 2px var(--accent) inset;filter:brightness(1.08)}
+/* hollow (outline) style differentiates Whiff / Take */
+.swing-pick.hollow{background:transparent;border:1.5px solid var(--accent);color:var(--accent)}
+.swing-pick.hollow.selected{background:rgba(79,157,255,0.16);color:#eaf6ff;box-shadow:none}
+
+/* ===== result section (K / BB / HBP / iBB) ===== */
+.result-sect{margin-top:4px;padding-top:8px;border-top:1px solid var(--soft-border)}
+.result-checks{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+.result-checks label{display:flex;gap:6px;align-items:center;font-size:14px;font-weight:600;color:#eaf6ff;cursor:pointer;padding:8px 12px;border:1px solid var(--soft-border);border-radius:8px;flex:1;min-width:70px}
+.result-checks input{accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+.result-submit{width:100%;padding:12px;font-size:15px}
+
+/* ===== modal back arrow ===== */
+.modal-back{position:absolute;top:8px;left:8px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--soft-border);border-radius:8px;color:#eaf6ff;font-size:18px;line-height:1;cursor:pointer;z-index:320}
+.modal-back:hover{background:rgba(255,255,255,0.06)}
+.modal:has(.modal-back) h4{margin-left:40px}
+
+/* ===== strike-zone circle colors by outcome ===== */
+.sz-circle.c-outzone{background:rgba(63,185,80,0.55);border-color:#3fb950}
+.sz-circle.c-outzone.latest{background:rgba(63,185,80,0.9);border-color:#64f07d}
+.sz-circle.c-inzone{background:rgba(255,107,107,0.55);border-color:#ff6b6b}
+.sz-circle.c-inzone.latest{background:rgba(255,107,107,0.9);border-color:#ffb0b0}
+.sz-circle.c-inplay{background:rgba(79,157,255,0.6);border-color:#4f9dff}
+.sz-circle.c-inplay.latest{background:rgba(79,157,255,0.92);border-color:#a9ccff}
+.sz-circle.c-whiff{background:rgba(255,107,107,0.6);border-color:#ff6b6b;display:flex;align-items:center;justify-content:center}
+.sz-circle.c-whiff.latest{background:rgba(255,107,107,0.92);border-color:#ffb0b0}
+.sz-circle .sz-x{color:#fff;font-size:13px;font-weight:900;line-height:1;pointer-events:none}
