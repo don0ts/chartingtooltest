@@ -149,6 +149,17 @@ function attachPlayerSearch(input, onPick){
 }
 /* ================================================================== */
 function titleCaseName(s){ if (!s) return ''; return s.trim().split(/\s+/).map(w => { const low = w.toLowerCase(); return low.charAt(0).toUpperCase() + low.slice(1); }).join(' '); }
+// Parse an "Add" entry that may carry a jersey/player ID alongside the name.
+// Accepted: "Name #12", "Name, 12", "12, Name", "Name 12", "12 Name". Returns {name,id}.
+function parseNameAndId(raw){
+  let s=(raw||'').trim(); if(!s) return {name:'',id:''};
+  let id='';
+  const hash = s.match(/#\s*([A-Za-z0-9._-]+)/);
+  if (hash){ id=hash[1]; s=s.replace(hash[0],' ').trim(); }
+  else if (s.indexOf(',')>=0){ const parts=s.split(',').map(x=>x.trim()).filter(Boolean); const ni=parts.findIndex(p=>/^[0-9]+$/.test(p)); if(ni>=0){ id=parts[ni]; s=parts.filter((_,i)=>i!==ni).join(' ').trim(); } else { s=parts.join(' '); } }
+  else { const tm=s.match(/^(.*?)\s+([0-9]+)$/); const lm=s.match(/^([0-9]+)\s+(.*)$/); if(tm){ s=tm[1].trim(); id=tm[2]; } else if(lm){ id=lm[1]; s=lm[2].trim(); } }
+  return { name: titleCaseName(s), id: String(id||'').trim() };
+}
 function compactName(name){ if (!name) return ''; const parts = name.trim().split(/\s+/); if (parts.length===1){ if (parts[0].length<=12) return parts[0]; return parts[0].slice(0,1)+'. '+parts[0].slice(Math.max(1, parts[0].length-12)); } const last = parts[parts.length-1]; const first = parts[0].charAt(0).toUpperCase(); return first + '. ' + last; }
 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -211,12 +222,15 @@ function msToToastTime(ms){
 let state = { sessions: [], currentSessionId: null, currentSide: 'top', compactNames: false, activeTab: 'game', workoutSection: 'defense' };
 // Strike-zone / log selection (not persisted): which pitch/play is focused.
 let selState = { idx:null, whole:false };
+let logSearchTerm = '';
 let floatState = { left:null, top:null, size:96 };
 
 /* DOM refs */
 const sessionSelect = $('session-select');
 const createSessionBtn = $('create-session-btn');
 const clearLogBtn = $('clear-log-btn');
+const logSearchInput = $('log-search');
+const logSearchClear = $('log-search-clear');
 const lockFloatsCheckbox = $('lock-floats');
 const clockDisplay = $('clock-display');
 const startBtn = $('start-btn');
@@ -416,9 +430,22 @@ function renderLog(){
   // Keep the selection valid if events changed underneath it.
   if (selState.idx!=null && !sess.events[selState.idx]){ selState.idx=null; selState.whole=false; }
   const groups = groupsOf(sess);
-  let playNo = groups.filter(g=>g.terminal).length;
+  // Pre-number terminal plays in chronological order so numbering is stable even when filtered.
+  let n=0; groups.forEach(g=>{ g._playNo = g.terminal ? (++n) : null; });
+  // Optional search: keep groups where any pitch matches pitcher/hitter name or ID.
+  const q = (logSearchTerm||'').trim().toLowerCase();
+  let visGroups = groups;
+  if (q){
+    visGroups = groups.filter(g=> g.pitches.some(p=>{
+      const e=p.ev;
+      const pid=String(e.pitcher_id||playerIdFor(sess,e.pitcher)||'').toLowerCase();
+      const hid=String(e.player_id||playerIdFor(sess,e.player)||'').toLowerCase();
+      return (e.pitcher||'').toLowerCase().includes(q) || (e.player||'').toLowerCase().includes(q) || (pid&&pid.includes(q)) || (hid&&hid.includes(q));
+    }));
+  }
+  if (q && !visGroups.length){ const empty=document.createElement('div'); empty.className='muted-note'; empty.style.padding='10px 4px'; empty.textContent='No players match “'+logSearchTerm.trim()+'”.'; logList.appendChild(empty); return; }
   // Newest group on top.
-  groups.slice().reverse().forEach((g)=>{
+  visGroups.slice().reverse().forEach((g)=>{
     const term = g.terminal ? g.pitches[g.pitches.length-1].ev : null;
     const matchup = (()=>{ const any=g.pitches[g.pitches.length-1].ev; return (any.pitcher||'')+' vs '+(any.player||''); })();
     const groupSel = (selState.whole && g.pitches.some(p=>p.idx===selState.idx));
@@ -426,7 +453,7 @@ function renderLog(){
     card.className = 'play-card'+(g.terminal?'':' live')+(groupSel?' sel':'');
     const head = document.createElement('div'); head.className='play-head'+(groupSel?' sel':'');
     const title = document.createElement('div'); title.className='play-title';
-    if (g.terminal){ title.textContent = 'Play '+playNo+' \u00b7 '+(evPlayLabel(term)||''); playNo--; }
+    if (g.terminal){ title.textContent = 'Play '+g._playNo+' \u00b7 '+(evPlayLabel(term)||''); }
     else { title.textContent = 'Current At-Bat'; }
     const sub = document.createElement('div'); sub.className='play-sub'; sub.textContent = matchup+'  \u00b7  '+g.pitches.length+(g.pitches.length===1?' pitch':' pitches');
     head.appendChild(title); head.appendChild(sub);
@@ -484,9 +511,9 @@ async function openOptionsModal(index){
     + '</div></div>';
   const res = await showModal({ title:'Options', html, buttons:[{label:'Save',value:'save',className:'btn'},{label:'Edit Play',value:'editplay',className:'btn'},{label:'Delete',value:'delete',className:'btn warn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
   if (res==='cancel' || !res) return;
-  if (res==='editplay'){ await classifyPitch(ev, ev.inzone); ev.contact = evContact(ev)?(ev.contact||1):''; ev.play = evPlayLabel(ev); saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
+  if (res==='editplay'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; if(hh){ ev.player=hh; ev.player_id=playerIdFor(sess,hh); } if(pp){ ev.pitcher=pp; ev.pitcher_id=playerIdFor(sess,pp); } await classifyPitch(ev, ev.inzone); ev.contact = evContact(ev)?(ev.contact||1):''; ev.play = evPlayLabel(ev); ev.notes={late,early}; ev.bad_data = late?'YES_LATE':(early?'YES_EARLY':'YES_FIX'); saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
   if (res==='delete'){ const c = await showModal({ title:'Delete entry?', message:'Delete this log entry?', buttons:[{label:'Delete',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if (!c) return; sess.events.splice(index,1); selState.idx=null; selState.whole=false; saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
-  if (res==='save'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; ev.player=hh; ev.pitcher=pp; ev.notes={late,early}; ev.bad_data=(late||early)?'YES':'FIX'; saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
+  if (res==='save'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; if(hh){ ev.player=hh; ev.player_id=playerIdFor(sess,hh); } if(pp){ ev.pitcher=pp; ev.pitcher_id=playerIdFor(sess,pp); } ev.notes={late,early}; ev.bad_data = late?'YES_LATE':(early?'YES_EARLY':'YES_FIX'); saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
 }
 
 /* ===== WORKOUT: Defense rendering ===== */
@@ -632,7 +659,7 @@ function exportDash(){
 }
 function addDashPlayer(raw){
   const sess=getCurrentSession(); if(!sess) return; ensureWorkout(sess);
-  const dh=sess.workout.dash; const val=(raw||'').trim(); if(!val) return; const name=titleCaseName(val);
+  const dh=sess.workout.dash; const val=(raw||'').trim(); if(!val) return; const parsed=parseNameAndId(val); const name=parsed.name; if(!name) return; if(parsed.id) assignPlayerId(name, parsed.id);
   if(!dh.players.includes(name)) dh.players.push(name); dh.selectedPlayer=name; saveAll(); renderDashList();
 }
 async function openWorkoutOptions(kind, index){
@@ -853,20 +880,20 @@ async function floatWorkoutClicked(){
 /* ===== add players ===== */
 function addPlayer(type, raw){
   const sess=getCurrentSession(); if(!sess) return showModal({title:'No session',message:'Create/select an event first.',buttons:[{label:'OK',value:true}]});
-  const team=sess.teams[state.currentSide]; const val=(raw||'').trim(); if(!val) return; const name=titleCaseName(val);
+  const team=sess.teams[state.currentSide]; const val=(raw||'').trim(); if(!val) return; const parsed=parseNameAndId(val); const name=parsed.name; if(!name) return; if(parsed.id) assignPlayerId(name, parsed.id);
   if (type==='pitcher'){ if(!team.pitchers.includes(name)) team.pitchers.push(name); team.selectedPitcher=name; }
   else { if(!team.hitters.includes(name)) team.hitters.push(name); team.selectedHitter=name; }
   saveAll(); renderPlayerLists();
 }
 function addDefensePlayer(group, raw){
   const sess=getCurrentSession(); if(!sess) return; ensureWorkout(sess);
-  const d=sess.workout.defense; const val=(raw||'').trim(); if(!val) return; const name=titleCaseName(val);
+  const d=sess.workout.defense; const val=(raw||'').trim(); if(!val) return; const parsed=parseNameAndId(val); const name=parsed.name; if(!name) return; if(parsed.id) assignPlayerId(name, parsed.id);
   if (!d[group].includes(name)) d[group].push(name); d.selectedGroup=group; d.selectedPlayer=name;
   saveAll(); renderDefenseLists();
 }
 function addBPPlayer(raw){
   const sess=getCurrentSession(); if(!sess) return; ensureWorkout(sess);
-  const b=sess.workout.bp; const val=(raw||'').trim(); if(!val) return; const name=titleCaseName(val);
+  const b=sess.workout.bp; const val=(raw||'').trim(); if(!val) return; const parsed=parseNameAndId(val); const name=parsed.name; if(!name) return; if(parsed.id) assignPlayerId(name, parsed.id);
   if (!b.players.includes(name)) b.players.push(name); b.selectedPlayer=name;
   saveAll(); renderBPList();
 }
@@ -1013,6 +1040,8 @@ function gameCsvDownload(kind){
 }
 
 /* ===== wire up ===== */
+if (logSearchInput){ logSearchInput.addEventListener('input', ()=>{ logSearchTerm=logSearchInput.value||''; if(logSearchClear) logSearchClear.style.display=logSearchTerm?'block':'none'; renderLog(); }); }
+if (logSearchClear){ logSearchClear.style.display='none'; logSearchClear.addEventListener('click', ()=>{ logSearchTerm=''; if(logSearchInput) logSearchInput.value=''; logSearchClear.style.display='none'; renderLog(); }); }
 sessionSelect.addEventListener('change', (e)=>{ state.currentSessionId=e.target.value; selState.idx=null; selState.whole=false; saveAll(); renderAll(); });
 createSessionBtn.addEventListener('click', async ()=>{
   const html='<div style="display:flex;flex-direction:column;gap:8px"><input id="sess-name" placeholder="Event name" /><input id="sess-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" /></div>';
@@ -1335,10 +1364,10 @@ async function locationSwingModal(ev, geomInzone){
     + '</div>'
     + '<div class="sect-lbl">Swing Outcome</div>'
     + '<div class="swing-row">'
-    +   '<button type="button" class="pk swing-pick" data-sw="InPlay">InPlay</button>'
+    +   '<button type="button" class="pk swing-pick hollow" data-sw="InPlay">InPlay</button>'
     +   '<button type="button" class="pk swing-pick hollow" data-sw="Whiff">Whiff</button>'
     +   '<button type="button" class="pk swing-pick hollow" data-sw="Take">Take</button>'
-    +   '<button type="button" class="pk swing-pick" data-sw="Foul">Foul</button>'
+    +   '<button type="button" class="pk swing-pick hollow" data-sw="Foul">Foul</button>'
     + '</div>'
     + '<div class="sect-lbl">Strike or Ball</div>'
     + '<div class="bs-checks">'
@@ -1370,7 +1399,7 @@ async function locationSwingModal(ev, geomInzone){
       (ev.result||[]).forEach(r=>{ const cb=resultChecks.querySelector('input[name=resr][value="'+r+'"]'); if(cb) cb.checked=true; });
     } else { resultSect.style.display='none'; resultChecks.innerHTML=''; }
   }
-  function paintSwing(){ swBtns.forEach(b=> b.classList.toggle('selected', b.getAttribute('data-sw')===swingSel)); if(!bsManual){ bs=defaultBS(); } paintBS(); renderResult(); }
+  function paintSwing(){ swBtns.forEach(b=> b.classList.toggle('selected', b.getAttribute('data-sw')===swingSel)); if(swingSel==='Whiff'||swingSel==='Foul'||swingSel==='InPlay'){ bs='Strike'; } else if(!bsManual){ bs=defaultBS(); } paintBS(); renderResult(); }
   swBtns.forEach(b=> b.addEventListener('click', ()=>{ swingSel=b.getAttribute('data-sw'); paintSwing(); }));
   bsBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ bs=b.value; bsManual=true; bsBtns.forEach(o=>{ if(o!==b) o.checked=false; }); } else { bs=''; bsManual=true; } }));
   locxBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ locxBtns.forEach(o=>{ if(o!==b) o.checked=false; }); } }));

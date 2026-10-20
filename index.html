@@ -13,7 +13,7 @@
     <div class="bar">
       <div style="display:flex;flex-direction:column">
         <h1>Pitch Event Recorder</h1>
-        <div class="subtitle">Game and Workout tracking. Compact UI with big Log animation.</div>
+        <div class="subtitle">Game and Workout Charting.</div>
       </div>
       <div class="controls-row" style="width:100%">
         <div style="display:flex;gap:8px;align-items:center">
@@ -162,6 +162,10 @@
                 <div style="display:flex;justify-content:space-between;align-items:center">
                   <h3 style="margin:0;font-size:14px">Log</h3>
                   <div class="muted-note">Tap Options to edit or delete</div>
+                </div>
+                <div class="log-search-wrap">
+                  <input id="log-search" class="log-search" type="text" placeholder="Search for Players" />
+                  <button id="log-search-clear" class="log-search-clear" type="button" aria-label="Clear search">×</button>
                 </div>
                 <div class="log-list" id="log-list"></div>
               </div>
