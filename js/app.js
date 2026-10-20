@@ -421,9 +421,10 @@ function renderLog(){
   groups.slice().reverse().forEach((g)=>{
     const term = g.terminal ? g.pitches[g.pitches.length-1].ev : null;
     const matchup = (()=>{ const any=g.pitches[g.pitches.length-1].ev; return (any.pitcher||'')+' vs '+(any.player||''); })();
+    const groupSel = (selState.whole && g.pitches.some(p=>p.idx===selState.idx));
     const card = document.createElement('div');
-    card.className = 'play-card'+(g.terminal?'':' live');
-    const head = document.createElement('div'); head.className='play-head';
+    card.className = 'play-card'+(g.terminal?'':' live')+(groupSel?' sel':'');
+    const head = document.createElement('div'); head.className='play-head'+(groupSel?' sel':'');
     const title = document.createElement('div'); title.className='play-title';
     if (g.terminal){ title.textContent = 'Play '+playNo+' \u00b7 '+(evPlayLabel(term)||''); playNo--; }
     else { title.textContent = 'Current At-Bat'; }
@@ -1215,12 +1216,16 @@ function evDescription(ev){
 }
 function selectPlay(group){
   const term = group.pitches[group.pitches.length-1];
-  selState.idx = term ? term.idx : null;
-  selState.whole = true;
+  const tid = term ? term.idx : null;
+  // Clicking the same already-selected play toggles it off.
+  if (selState.whole && selState.idx===tid){ selState.idx=null; selState.whole=false; }
+  else { selState.idx = tid; selState.whole = true; }
   renderLog(); renderStrikeZone(); renderSzDesc();
 }
 function selectPitch(idx){
-  selState.idx = idx; selState.whole = false;
+  // Clicking the same already-selected pitch toggles it off.
+  if (!selState.whole && selState.idx===idx){ selState.idx=null; selState.whole=false; }
+  else { selState.idx = idx; selState.whole = false; }
   renderLog(); renderStrikeZone(); renderSzDesc();
 }
 // Area above the Balls/Strikes count.
@@ -1267,7 +1272,7 @@ function renderStrikeZone(){
   if (selState.idx!=null && !selState.whole) focusIdx = selState.idx;
   else if (shown.length) focusIdx = shown[shown.length-1].idx;
   shown.forEach((p,i)=>{ const e=p.ev; const c=document.createElement('div');
-    const isSel = (selState.idx===p.idx && !selState.whole);
+    const isSel = (selState.idx===p.idx);
     c.className='sz-circle '+circleClass(e)+(i===shown.length-1?' latest':'')+(isSel?' sel':'');
     c.style.left=e.pitch_x+'%'; c.style.top=e.pitch_y+'%';
     c.dataset.idx=p.idx;
@@ -1278,9 +1283,10 @@ function renderStrikeZone(){
     const num=document.createElement('span'); num.className='sz-num'; num.textContent=String(i+1); c.appendChild(num);
     szArea.appendChild(c);
   });
-  // Count the balls/strikes that were running up to and including the focus pitch.
+  // Count balls/strikes up to the focus pitch. InPlay counts as a strike in the
+  // CSV but must NOT bump the displayed strike count (an at-bat ends on contact).
   let balls=0, strikes=0;
-  for (const p of shown){ if (p.ev.ball_strike==='Ball') balls++; else if (p.ev.ball_strike==='Strike') strikes++; if (p.idx===focusIdx) break; }
+  for (const p of shown){ if (p.ev.ball_strike==='Ball') balls++; else if (p.ev.ball_strike==='Strike' && p.ev.swing!=='InPlay') strikes++; if (p.idx===focusIdx) break; }
   if (szCount) szCount.textContent='Balls: '+balls+' \u00b7 Strikes: '+strikes;
 }
 
