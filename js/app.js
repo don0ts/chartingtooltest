@@ -89,13 +89,24 @@ function matchRank(name, t){
   if (n.indexOf(t) >= 0) return 2;
   return -1;
 }
+// Rank/match players by NAME or by their player_id (from the Firebase "Players"
+// database). An id match ranks: exact / starts-with = 0 (top), contains = 2.
+function matchIdRank(id, t){
+  const s = String(id==null?'':id).toLowerCase();
+  if (!s) return -1;
+  if (s===t || s.startsWith(t)) return 0;
+  if (s.indexOf(t) >= 0) return 2;
+  return -1;
+}
 function searchPlayers(term){
   const t = String(term||'').trim().toLowerCase();
   return loadPlayerCache().then(list => {
     if (!t) return list.slice(0, 12); // list is already alphabetical
     const scored = [];
     for (const p of list){
-      const r = matchRank(p.name, t);
+      let r = matchRank(p.name, t);
+      const ir = matchIdRank(p.id, t);           // also search by player_id
+      if (ir >= 0 && (r < 0 || ir < r)) r = ir;  // keep the best (lowest) rank
       if (r >= 0) scored.push({ p, r });
     }
     scored.sort((a,b)=> a.r - b.r || a.p.name.localeCompare(b.p.name));
@@ -1213,7 +1224,19 @@ function circleClass(ev){
 // terminal play event is one group; trailing pitches with no result are the live at-bat.
 function groupsOf(sess){
   const groups=[]; let cur=[];
-  (sess.events||[]).forEach((ev,idx)=>{ cur.push({ev,idx}); if (evIsPlay(ev)){ groups.push({pitches:cur, terminal:true}); cur=[]; } });
+  const mkey=(ev)=> (ev.pitcher||'')+'\u0000'+(ev.player||''); // matchup = pitcher|hitter
+  (sess.events||[]).forEach((ev,idx)=>{
+    // Branch into its own container when the matchup (pitcher/hitter) changes from
+    // the previous pitch still open in the current group. This makes an edited
+    // pitch whose players differ from its container split off instead of staying
+    // grouped with the surrounding play.
+    if (cur.length && mkey(cur[cur.length-1].ev) !== mkey(ev)){
+      groups.push({pitches:cur, terminal:false});
+      cur=[];
+    }
+    cur.push({ev,idx});
+    if (evIsPlay(ev)){ groups.push({pitches:cur, terminal:true}); cur=[]; }
+  });
   if (cur.length) groups.push({pitches:cur, terminal:false});
   return groups;
 }
