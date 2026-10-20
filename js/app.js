@@ -298,6 +298,7 @@ function buildDefaultWorkout(){
 }
 function getCurrentSession(){ return state.sessions.find(s => s.id === state.currentSessionId) || null; }
 function ensureSessionClock(sess){ if (!sess.clock) sess.clock = { running:false, elapsedBefore:0, startTimestamp:null }; }
+function allocEventId(store){ let m=0; (store && store.events ? store.events : []).forEach(e=>{ if (typeof e.id==='number' && e.id>m) m=e.id; }); return m+1; }
 function ensureSessionCounters(sess){
   if (typeof sess.nextContactId !== 'number'){ let m=0; sess.events.forEach(e=>{ if (typeof e.contact==='number' && e.contact>m) m=e.contact; }); sess.nextContactId=m+1; }
   if (typeof sess.nextPlayId !== 'number'){ let m=0; sess.events.forEach(e=>{ if (typeof e.play==='number' && e.play>m) m=e.play; }); sess.nextPlayId=m+1; }
@@ -790,7 +791,7 @@ async function floatLogClicked(){
   const sess=getCurrentSession(); if(!sess){ await showModal({title:'No session',message:'Create/select an event first.',buttons:[{label:'OK',value:true}]}); return; }
   if (!(await ensureClockRunningOrAsk(sess))) return;
   const team=sess.teams[state.currentSide];
-  const ev={ id:sess.nextId++, timecode_ms:Math.round(computeSessionElapsedMs(sess)), type:'', mph:'', player:team.selectedHitter||'', player_id:playerIdFor(sess, team.selectedHitter), pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess, team.selectedPitcher), bad_data:'NO', notes:{}, contact:'', play:'' };
+  const ev={ id:allocEventId(sess), timecode_ms:Math.round(computeSessionElapsedMs(sess)), type:'', mph:'', player:team.selectedHitter||'', player_id:playerIdFor(sess, team.selectedHitter), pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess, team.selectedPitcher), bad_data:'NO', notes:{}, contact:'', play:'' };
   sess.events.push(ev); saveAll(); renderLog(); updatePitcherCountBadges();
   flashElement(floatBtn); showToast('Logged #'+ev.id+' - '+msToToastTime(ev.timecode_ms));
 }
@@ -799,7 +800,7 @@ async function floatContactClicked(){
   if (!(await ensureClockRunningOrAsk(sess))) return;
   ensureSessionCounters(sess);
   const team=sess.teams[state.currentSide];
-  const ev={ id:sess.nextId++, timecode_ms:Math.round(computeSessionElapsedMs(sess)), type:'', mph:'', player:team.selectedHitter||'', player_id:playerIdFor(sess, team.selectedHitter), pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess, team.selectedPitcher), bad_data:'NO', notes:{}, contact:sess.nextContactId++, play:'' };
+  const ev={ id:allocEventId(sess), timecode_ms:Math.round(computeSessionElapsedMs(sess)), type:'', mph:'', player:team.selectedHitter||'', player_id:playerIdFor(sess, team.selectedHitter), pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess, team.selectedPitcher), bad_data:'NO', notes:{}, contact:sess.nextContactId++, play:'' };
   sess.events.push(ev); saveAll(); renderLog(); updatePitcherCountBadges();
   flashElement(floatContactBtn); showToast('Contact #'+ev.contact+' - '+msToToastTime(ev.timecode_ms), 'contact');
 }
@@ -810,20 +811,20 @@ async function floatWorkoutClicked(){
   if (state.workoutSection==='dash'){
     const dh=sess.workout.dash;
     if (!dh.selectedPlayer){ showToast('Select a runner first'); return; }
-    const ev={ id:dh.nextId++, timecode_ms:Math.round(computeSessionElapsedMs(sess)), player:dh.selectedPlayer, player_id:playerIdFor(sess, dh.selectedPlayer), bad_data:'NO' };
+    const ev={ id:allocEventId(dh), timecode_ms:Math.round(computeSessionElapsedMs(sess)), player:dh.selectedPlayer, player_id:playerIdFor(sess, dh.selectedPlayer), bad_data:'NO' };
     dh.events.push(ev); saveAll(); renderDashLog();
     flashElement(floatWorkoutBtn); showToast('Logged #'+ev.id+' 60YD - '+msToToastTime(ev.timecode_ms), 'store-toast');
   } else if (state.workoutSection==='defense'){
     const d=sess.workout.defense;
     if (!d.selectedPlayer){ showToast('Select a player first'); return; }
     const pos = DEF_POS[d.selectedGroup] || 'OF';
-    const ev={ id:d.nextId++, timecode_ms:Math.round(computeSessionElapsedMs(sess)), player:d.selectedPlayer, player_id:playerIdFor(sess, d.selectedPlayer), position:pos, bad_data:'NO' };
+    const ev={ id:allocEventId(d), timecode_ms:Math.round(computeSessionElapsedMs(sess)), player:d.selectedPlayer, player_id:playerIdFor(sess, d.selectedPlayer), position:pos, bad_data:'NO' };
     d.events.push(ev); saveAll(); renderDefenseLog();
     flashElement(floatWorkoutBtn); showToast('Logged #'+ev.id+' '+pos+' - '+msToToastTime(ev.timecode_ms), 'store-toast');
   } else {
     const b=sess.workout.bp;
     if (!b.selectedPlayer){ showToast('Select a player first'); return; }
-    const ev={ id:b.nextId++, timecode_ms:Math.round(computeSessionElapsedMs(sess)), player:b.selectedPlayer, player_id:playerIdFor(sess, b.selectedPlayer), angle:(b.angle||'S'), bad_data:'NO' };
+    const ev={ id:allocEventId(b), timecode_ms:Math.round(computeSessionElapsedMs(sess)), player:b.selectedPlayer, player_id:playerIdFor(sess, b.selectedPlayer), angle:(b.angle||'S'), bad_data:'NO' };
     b.events.push(ev); saveAll(); renderBPLog();
     flashElement(floatWorkoutBtn); showToast('Logged #'+ev.id+' '+ev.angle+' - '+msToToastTime(ev.timecode_ms), 'store-toast');
   }
@@ -1381,7 +1382,7 @@ async function strikeZoneClick(e){
   const ny = Math.max(zrect.top, Math.min(e.clientY, zrect.bottom));
   const inzone = Math.hypot(e.clientX-nx, e.clientY-ny) <= r;
   const team=sess.teams[state.currentSide];
-  const ev={ id:sess.nextId++, timecode_ms:Math.round(computeSessionElapsedMs(sess)),
+  const ev={ id:allocEventId(sess), timecode_ms:Math.round(computeSessionElapsedMs(sess)),
     player:team.selectedHitter||'', player_id:playerIdFor(sess,team.selectedHitter),
     pitcher:team.selectedPitcher||'', pitcher_id:playerIdFor(sess,team.selectedPitcher),
     pitch_x:px, pitch_y:py, inzone:inzone,
