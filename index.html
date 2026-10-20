@@ -113,11 +113,18 @@
                   <div class="zg zgh1"></div><div class="zg zgh2"></div>
                 </div>
               </div>
+              <div id="sz-desc" class="sz-desc"></div>
               <div id="sz-count" class="sz-count">Balls: 0 · Strikes: 0</div>
             </div>
           </div>
 
-          <h3>Players</h3>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+            <h3 style="margin:0">Players</h3>
+            <div class="segmented" id="players-side" style="margin-left:auto">
+              <button id="side-top-2">Top</button>
+              <button id="side-bot-2">Bot</button>
+            </div>
+          </div>
 
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <div style="flex:1;min-width:200px">
@@ -322,10 +329,7 @@
     <footer id="footer-note">Autosaves locally.</footer>
   </div>
 
-  <button id="float-log-btn" class="float-log" aria-label="Log">Log</button>
-  <button id="float-contact-btn" class="float-contact" aria-label="Contact">Contact</button>
   <button id="float-workout-btn" class="float-workout" aria-label="Workout Log">Log</button>
-  <button id="float-start-btn" class="float-start" aria-label="Start Clock"><span class="fs-ico"></span></button>
 
   <div id="toast-container" aria-hidden="true"></div>
   <div id="modal-root" class="modal-root"></div>

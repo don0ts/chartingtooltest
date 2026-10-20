@@ -263,6 +263,21 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
 .sz-zone .zgh2{top:66.66%;left:0;height:1px;width:100%}
 .sz-circle{position:absolute;width:24px;height:24px;border-radius:50%;background:rgba(122,138,154,0.55);border:2px solid #7a8a9a;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .sz-circle.latest{box-shadow:0 0 0 3px rgba(255,255,255,0.25)}
+.sz-circle.sel{box-shadow:0 0 0 3px #fff,0 0 14px 5px rgba(255,255,255,0.85);z-index:5}
+/* selected pitch glow + play log cards */
+.sz-desc{min-height:20px;margin-bottom:6px;font-size:13px;font-weight:700;letter-spacing:.2px;color:#eaf6ff;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.sz-desc.matchup{color:var(--muted);font-weight:800}
+.sz-desc.has-info{color:#eaf6ff}
+.sz-startclock{font-size:13px;font-weight:800;padding:6px 16px}
+.play-card{border:1px solid var(--soft-border);border-radius:12px;background:rgba(255,255,255,0.015);margin-bottom:10px;overflow:hidden}
+.play-card.live{border-color:rgba(79,157,255,0.45)}
+.play-head{display:flex;flex-direction:column;gap:2px;padding:9px 12px;cursor:pointer;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--soft-border)}
+.play-head:hover{background:rgba(255,255,255,0.05)}
+.play-title{font-size:13px;font-weight:900;letter-spacing:.3px;color:#eaf6ff}
+.play-sub{font-size:12px;color:var(--muted)}
+.play-pitches{display:flex;flex-direction:column;gap:6px;padding:8px}
+.pitch-item{cursor:pointer}
+.pitch-item.sel{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,0.65) inset,0 0 10px 1px rgba(255,255,255,0.35);background:rgba(255,255,255,0.05)}
 .sz-num{color:#fff;font-size:12px;font-weight:900;line-height:1;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,0.6)}
 .sz-count{font-size:14px;font-weight:800;letter-spacing:.3px;color:#eaf6ff}
 .sz-status{font-size:14px;font-weight:800;letter-spacing:.3px;padding:6px 14px;border-radius:999px;border:1px solid var(--soft-border);color:var(--muted)}

@@ -209,6 +209,8 @@ function msToToastTime(ms){
 
 /* State */
 let state = { sessions: [], currentSessionId: null, currentSide: 'top', compactNames: false, activeTab: 'game', workoutSection: 'defense' };
+// Strike-zone / log selection (not persisted): which pitch/play is focused.
+let selState = { idx:null, whole:false };
 let floatState = { left:null, top:null, size:96 };
 
 /* DOM refs */
@@ -240,6 +242,9 @@ const dashLogList = $('dash-log-list');
 
 const sideTop = $('side-top');
 const sideBot = $('side-bot');
+const sideTop2 = $('side-top-2');
+const sideBot2 = $('side-bot-2');
+const szDesc = $('sz-desc');
 
 const addPitcherInput = $('add-pitcher');
 const addPitcherBtn = $('add-pitcher-btn');
@@ -408,30 +413,44 @@ function renderLog(){
   logList.innerHTML = '';
   if (!sess) return;
   ensureSessionCounters(sess);
-  sess.events.slice().reverse().forEach((ev, revIdx) => {
-    const idx = sess.events.length - 1 - revIdx;
-    const item = document.createElement('div'); item.className = 'log-item';
-    const left = document.createElement('div'); left.className = 'log-left';
-    const main = document.createElement('div'); main.textContent = '#'+ev.id+' \u2014 '+msToLabel(ev.timecode_ms); main.style.fontWeight='700';
-    const meta = document.createElement('div'); meta.className='log-meta';
-    let metaText = (ev.player||'')+' vs '+(ev.pitcher||'');
-    const cls=[];
-    if (ev.pitch_group) cls.push(ev.pitch_group+(ev.velo?(' '+ev.velo):''));
-    if (ev.ball_strike) cls.push(ev.ball_strike);
-    if (ev.swing && ev.swing!=='InPlay') cls.push(ev.swing);
-    const pl=evPlayLabel(ev); if (pl) cls.push('Play: '+pl);
-    if (ev.contact_quality) cls.push(ev.contact_quality);
-    if (ev.batted_ball) cls.push(ev.batted_ball);
-    if (ev.location && LOC_LABEL[ev.location]) cls.push(LOC_LABEL[ev.location]);
-    if (cls.length) metaText += '  \u00b7  '+cls.join(' \u00b7 ');
-    meta.textContent = metaText;
-    left.appendChild(main); left.appendChild(meta);
-    const actions = document.createElement('div');
-    const opts = document.createElement('button'); opts.className='btn small'; opts.textContent='Options';
-    opts.addEventListener('click', ()=> openOptionsModal(idx));
-    actions.appendChild(opts);
-    item.appendChild(left); item.appendChild(actions); logList.appendChild(item);
+  // Keep the selection valid if events changed underneath it.
+  if (selState.idx!=null && !sess.events[selState.idx]){ selState.idx=null; selState.whole=false; }
+  const groups = groupsOf(sess);
+  let playNo = groups.filter(g=>g.terminal).length;
+  // Newest group on top.
+  groups.slice().reverse().forEach((g)=>{
+    const term = g.terminal ? g.pitches[g.pitches.length-1].ev : null;
+    const matchup = (()=>{ const any=g.pitches[g.pitches.length-1].ev; return (any.pitcher||'')+' vs '+(any.player||''); })();
+    const card = document.createElement('div');
+    card.className = 'play-card'+(g.terminal?'':' live');
+    const head = document.createElement('div'); head.className='play-head';
+    const title = document.createElement('div'); title.className='play-title';
+    if (g.terminal){ title.textContent = 'Play '+playNo+' \u00b7 '+(evPlayLabel(term)||''); playNo--; }
+    else { title.textContent = 'Current At-Bat'; }
+    const sub = document.createElement('div'); sub.className='play-sub'; sub.textContent = matchup+'  \u00b7  '+g.pitches.length+(g.pitches.length===1?' pitch':' pitches');
+    head.appendChild(title); head.appendChild(sub);
+    head.addEventListener('click', ()=> selectPlay(g));
+    card.appendChild(head);
+    const wrap = document.createElement('div'); wrap.className='play-pitches';
+    g.pitches.slice().reverse().forEach(p=> wrap.appendChild(buildPitchItem(sess, p.ev, p.idx)));
+    card.appendChild(wrap);
+    logList.appendChild(card);
   });
+}
+function buildPitchItem(sess, ev, idx){
+  const item = document.createElement('div');
+  item.className = 'log-item pitch-item'+((selState.idx===idx && !selState.whole)?' sel':'');
+  const left = document.createElement('div'); left.className='log-left';
+  const main = document.createElement('div'); main.textContent = '#'+ev.id+' \u2014 '+msToLabel(ev.timecode_ms); main.style.fontWeight='700';
+  const meta = document.createElement('div'); meta.className='log-meta'; meta.textContent = evDescription(ev);
+  left.appendChild(main); left.appendChild(meta);
+  const actions = document.createElement('div');
+  const opts = document.createElement('button'); opts.className='btn small'; opts.textContent='Options';
+  opts.addEventListener('click', (e)=>{ e.stopPropagation(); openOptionsModal(idx); });
+  actions.appendChild(opts);
+  item.appendChild(left); item.appendChild(actions);
+  item.addEventListener('click', ()=> selectPitch(idx));
+  return item;
 }
 
 /* ===== GAME options modal ===== */
@@ -464,9 +483,9 @@ async function openOptionsModal(index){
     + '</div></div>';
   const res = await showModal({ title:'Options', html, buttons:[{label:'Save',value:'save',className:'btn'},{label:'Edit Play',value:'editplay',className:'btn'},{label:'Delete',value:'delete',className:'btn warn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
   if (res==='cancel' || !res) return;
-  if (res==='editplay'){ await classifyPitch(ev, ev.inzone); ev.contact = evContact(ev)?(ev.contact||1):''; ev.play = evPlayLabel(ev); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges(); return; }
-  if (res==='delete'){ const c = await showModal({ title:'Delete entry?', message:'Delete this log entry?', buttons:[{label:'Delete',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if (!c) return; sess.events.splice(index,1); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges(); return; }
-  if (res==='save'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; ev.player=hh; ev.pitcher=pp; ev.notes={late,early}; ev.bad_data=(late||early)?'YES':'FIX'; saveAll(); renderLog(); updatePitcherCountBadges(); return; }
+  if (res==='editplay'){ await classifyPitch(ev, ev.inzone); ev.contact = evContact(ev)?(ev.contact||1):''; ev.play = evPlayLabel(ev); saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
+  if (res==='delete'){ const c = await showModal({ title:'Delete entry?', message:'Delete this log entry?', buttons:[{label:'Delete',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if (!c) return; sess.events.splice(index,1); selState.idx=null; selState.whole=false; saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
+  if (res==='save'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; ev.player=hh; ev.pitcher=pp; ev.notes={late,early}; ev.bad_data=(late||early)?'YES':'FIX'; saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
 }
 
 /* ===== WORKOUT: Defense rendering ===== */
@@ -852,7 +871,7 @@ function addBPPlayer(raw){
 }
 
 /* ===== clear log (game only) ===== */
-async function clearLog(){ const sess=getCurrentSession(); if(!sess) return; const ok=await showModal({title:'Clear Log',message:'Clear all Game entries for this event?',buttons:[{label:'Clear',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if(!ok) return; sess.events=[]; sess.nextId=1; sess.nextContactId=1; sess.nextPlayId=1; saveAll(); renderLog(); updatePitcherCountBadges(); }
+async function clearLog(){ const sess=getCurrentSession(); if(!sess) return; const ok=await showModal({title:'Clear Log',message:'Clear all Game entries for this event?',buttons:[{label:'Clear',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if(!ok) return; sess.events=[]; sess.nextId=1; sess.nextContactId=1; sess.nextPlayId=1; selState.idx=null; selState.whole=false; saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); }
 
 /* ===== copy / paste player lists ===== */
 function copyTextToClipboard(text){
@@ -898,12 +917,12 @@ async function pasteWorkoutList(group){
 
 /* ===== floating button visibility (tab-aware) ===== */
 function updateFloatingButtonVisibility(){
-  // Game pitches are logged on the strike zone, so the Log/Contact/Play floats are retired.
-  floatBtn.style.display = 'none';
-  floatContactBtn.style.display = 'none';
+  // Game floats are fully retired: pitches log on the strike zone, clock starts from the Strike Zone panel.
+  if (floatBtn) floatBtn.style.display = 'none';
+  if (floatContactBtn) floatContactBtn.style.display = 'none';
+  if (floatStartBtn) floatStartBtn.style.display = 'none';
   const isWorkout = state.activeTab==='workout';
-  floatWorkoutBtn.style.display = isWorkout ? 'flex' : 'none';
-  floatStartBtn.style.display = 'flex';
+  if (floatWorkoutBtn) floatWorkoutBtn.style.display = isWorkout ? 'flex' : 'none';
 }
 
 /* ===== tab + section switching ===== */
@@ -926,9 +945,9 @@ function setWorkoutSection(sec){
   dashSection.style.display = sec==='dash' ? '' : 'none';
   defenseSection.style.display = sec==='defense' ? '' : 'none';
   bpSection.style.display = sec==='bp' ? '' : 'none';
-  floatWorkoutBtn.textContent = 'Log';
+  if (floatWorkoutBtn){ floatWorkoutBtn.textContent = 'Log';
   const c = sec==='dash' ? 'var(--dash-orange)' : sec==='defense' ? 'var(--of-green)' : 'var(--bp-teal)';
-  floatWorkoutBtn.style.background = c;
+  floatWorkoutBtn.style.background = c; }
 }
 
 /* ===== angle checkboxes (mutually exclusive) ===== */
@@ -973,10 +992,7 @@ function initAllFloating(){
   if (!floatState.start) floatState.start={left:null,top:null,size:58};
   if (floatState.left!=null && floatState.top!=null && floatState.pitch.left==null){ floatState.pitch.left=floatState.left; floatState.pitch.top=floatState.top; }
   if (floatState.size!=null && floatState.pitch.size==null){ floatState.pitch.size=floatState.size; }
-  initDraggableFloat(floatBtn, 'pitch', 18, 18);
-  initDraggableFloat(floatContactBtn, 'contact', 130, 18);
   initDraggableFloat(floatWorkoutBtn, 'workout', 18, 18);
-  initDraggableFloat(floatStartBtn, 'start', Math.max(18, window.innerWidth-76), 18);
   if (lockFloatsCheckbox){ lockFloatsCheckbox.checked = !!floatState.locked; }
   document.body.classList.toggle('floats-locked', !!floatState.locked);
   updateFloatingButtonVisibility();
@@ -996,7 +1012,7 @@ function gameCsvDownload(kind){
 }
 
 /* ===== wire up ===== */
-sessionSelect.addEventListener('change', (e)=>{ state.currentSessionId=e.target.value; saveAll(); renderAll(); });
+sessionSelect.addEventListener('change', (e)=>{ state.currentSessionId=e.target.value; selState.idx=null; selState.whole=false; saveAll(); renderAll(); });
 createSessionBtn.addEventListener('click', async ()=>{
   const html='<div style="display:flex;flex-direction:column;gap:8px"><input id="sess-name" placeholder="Event name" /><input id="sess-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" /></div>';
   const res=await showModal({ title:'Create Event', html, buttons:[{label:'Create',value:'create',className:'btn'},{label:'Cancel',value:'cancel',className:'btn ghost'}]});
@@ -1090,6 +1106,7 @@ angleBehind.addEventListener('change', ()=> setAngle('BH'));
 
 /* side + clock */
 if (sideTop && sideBot){ sideTop.addEventListener('click', ()=>{ state.currentSide='top'; saveAll(); renderAll(); }); sideBot.addEventListener('click', ()=>{ state.currentSide='bot'; saveAll(); renderAll(); }); }
+if (sideTop2 && sideBot2){ sideTop2.addEventListener('click', ()=>{ state.currentSide='top'; saveAll(); renderAll(); }); sideBot2.addEventListener('click', ()=>{ state.currentSide='bot'; saveAll(); renderAll(); }); }
 startBtn.addEventListener('click', ()=>{ startClockCurrent(); renderClockButtons(); });
 pauseBtn.addEventListener('click', ()=>{ pauseClockCurrent().then(()=> renderClockButtons()); });
 resetBtn.addEventListener('click', ()=>{ resetClockCurrent().then(()=> renderClockButtons()); });
@@ -1102,6 +1119,8 @@ function renderAll(){
   renderDefenseLists(); renderBPList(); renderDashList(); renderDefenseLog(); renderBPLog(); renderDashLog(); renderCsvStorage();
   updateClockDisplay(); renderClockButtons();
   if (sideTop && sideBot){ sideTop.classList.toggle('active', state.currentSide==='top'); sideBot.classList.toggle('active', state.currentSide==='bot'); }
+  if (sideTop2 && sideBot2){ sideTop2.classList.toggle('active', state.currentSide==='top'); sideBot2.classList.toggle('active', state.currentSide==='bot'); }
+  renderSzDesc();
   if (sess){ const a=sess.workout.bp.angle||'S'; angleSide.checked=(a==='S'); angleBehind.checked=(a==='BH'); }
   setActiveTab(state.activeTab||'game');
   setWorkoutSection(state.workoutSection||'dash');
@@ -1159,6 +1178,71 @@ function circleClass(ev){
   return 'c-ball';
 }
 
+/* ----- play grouping + selection + descriptions ----- */
+// Group events into plays (plate appearances): each run of pitches ending with a
+// terminal play event is one group; trailing pitches with no result are the live at-bat.
+function groupsOf(sess){
+  const groups=[]; let cur=[];
+  (sess.events||[]).forEach((ev,idx)=>{ cur.push({ev,idx}); if (evIsPlay(ev)){ groups.push({pitches:cur, terminal:true}); cur=[]; } });
+  if (cur.length) groups.push({pitches:cur, terminal:false});
+  return groups;
+}
+// Which group to display in the strike zone: the selected one, else the live at-bat.
+function displayGroup(sess){
+  const groups=groupsOf(sess);
+  if (selState.idx!=null){
+    const g=groups.find(gr=>gr.pitches.some(p=>p.idx===selState.idx));
+    if (g) return g;
+  }
+  const last=groups[groups.length-1];
+  if (last && !last.terminal) return last;
+  return {pitches:[], terminal:false};
+}
+// Full description line, pitcher first. 'Strike' is omitted when it's obvious
+// (a play, a whiff, or a foul) — CSV data is untouched, only the description text.
+function evDescription(ev){
+  if (!ev) return '';
+  const parts=[ (ev.pitcher||'')+' vs '+(ev.player||'') ];
+  if (ev.pitch_group) parts.push(ev.pitch_group+(ev.velo?(' '+ev.velo):''));
+  const hideStrike = evIsPlay(ev) || ev.swing==='Whiff' || ev.swing==='Foul';
+  if (ev.ball_strike && !(ev.ball_strike==='Strike' && hideStrike)) parts.push(ev.ball_strike);
+  if (ev.swing && ev.swing!=='InPlay') parts.push(ev.swing);
+  const pl=evPlayLabel(ev); if (pl) parts.push('Play '+pl);
+  if (ev.contact_quality) parts.push(ev.contact_quality);
+  if (ev.batted_ball) parts.push(ev.batted_ball);
+  if (ev.location && LOC_LABEL[ev.location]) parts.push(LOC_LABEL[ev.location]);
+  return parts.join(' \u00b7 ');
+}
+function selectPlay(group){
+  const term = group.pitches[group.pitches.length-1];
+  selState.idx = term ? term.idx : null;
+  selState.whole = true;
+  renderLog(); renderStrikeZone(); renderSzDesc();
+}
+function selectPitch(idx){
+  selState.idx = idx; selState.whole = false;
+  renderLog(); renderStrikeZone(); renderSzDesc();
+}
+// Area above the Balls/Strikes count.
+function renderSzDesc(){
+  const el = szDesc; if (!el) return;
+  el.innerHTML=''; el.className='sz-desc';
+  const sess=getCurrentSession();
+  if (!sess){ el.textContent='Create or select an event to begin.'; return; }
+  ensureSessionClock(sess);
+  if (!sess.clock.running){
+    const btn=document.createElement('button'); btn.className='btn sz-startclock'; btn.textContent='Start the Clock!';
+    btn.addEventListener('click', ()=>{ startClockCurrent(); renderClockButtons(); renderSzDesc(); });
+    el.appendChild(btn); return;
+  }
+  if (selState.idx!=null && sess.events[selState.idx]){
+    el.classList.add('has-info'); el.textContent = evDescription(sess.events[selState.idx]); return;
+  }
+  const team=sess.teams[state.currentSide];
+  el.classList.add('matchup');
+  el.textContent = (team.selectedPitcher||'')+' vs '+(team.selectedHitter||'');
+}
+
 /* ----- active matchup selects ----- */
 function renderActiveSelects(){
   if (!activePitcherSel || !activeHitterSel) return;
@@ -1176,22 +1260,27 @@ function renderStrikeZone(){
   if (!szArea) return;
   szArea.querySelectorAll('.sz-circle').forEach(c=>c.remove());
   const sess=getCurrentSession();
-  const allPitch = sess ? sess.events.map((e,idx)=>({e:e,idx:idx})).filter(o=> o.e.pitch_x!=null && o.e.pitch_y!=null) : [];
-  const start = liveStartIndex(allPitch.map(o=>o.e));
-  const shown = allPitch.slice(start);
-  let balls=0, strikes=0;
-  shown.forEach((o,i)=>{ const e=o.e; const c=document.createElement('div');
-    c.className='sz-circle '+circleClass(e)+(i===shown.length-1?' latest':'');
+  const group = sess ? displayGroup(sess) : {pitches:[]};
+  const shown = group.pitches.filter(p=> p.ev.pitch_x!=null && p.ev.pitch_y!=null);
+  // Focus pitch: a single selected pitch, else the last pitch in the group.
+  let focusIdx = null;
+  if (selState.idx!=null && !selState.whole) focusIdx = selState.idx;
+  else if (shown.length) focusIdx = shown[shown.length-1].idx;
+  shown.forEach((p,i)=>{ const e=p.ev; const c=document.createElement('div');
+    const isSel = (selState.idx===p.idx && !selState.whole);
+    c.className='sz-circle '+circleClass(e)+(i===shown.length-1?' latest':'')+(isSel?' sel':'');
     c.style.left=e.pitch_x+'%'; c.style.top=e.pitch_y+'%';
-    c.dataset.idx=o.idx;
+    c.dataset.idx=p.idx;
     const info=pitchInfoStr(e); c.dataset.info=info; c.setAttribute('aria-label',info);
     c.addEventListener('mouseenter', (me)=> showSzTip(info, me));
     c.addEventListener('mousemove', moveSzTip);
     c.addEventListener('mouseleave', hideSzTip);
     const num=document.createElement('span'); num.className='sz-num'; num.textContent=String(i+1); c.appendChild(num);
     szArea.appendChild(c);
-    if (e.ball_strike==='Ball') balls++; else if (e.ball_strike==='Strike') strikes++;
   });
+  // Count the balls/strikes that were running up to and including the focus pitch.
+  let balls=0, strikes=0;
+  for (const p of shown){ if (p.ev.ball_strike==='Ball') balls++; else if (p.ev.ball_strike==='Strike') strikes++; if (p.idx===focusIdx) break; }
   if (szCount) szCount.textContent='Balls: '+balls+' \u00b7 Strikes: '+strikes;
 }
 
@@ -1389,17 +1478,20 @@ async function strikeZoneClick(e){
     pitch_group:'', velo:'', location:(inzone?'InZone':'OutOfZone'), swing:'', pa_outcome:'', contact_quality:'', batted_ball:'', batted_to:'',
     result:[], ball_strike:'', bad_data:'NO', notes:{}, contact:'', play:'' };
   sess.events.push(ev); saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
-  flashElement(floatStartBtn);
   const ok = await classifyPitch(ev, inzone);
   if(!ok){
     const i = sess.events.indexOf(ev);
     if(i>=0) sess.events.splice(i,1);
-    saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
+    selState.idx=null; selState.whole=false;
+    saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges();
     return;
   }
   ev.contact = evContact(ev) ? (ev.contact||1) : '';
   ev.play = evPlayLabel(ev);
-  saveAll(); renderLog(); renderStrikeZone(); updatePitcherCountBadges();
+  // Default selection: select the just-logged pitch unless it resolved a play.
+  if (evIsPlay(ev)){ selState.idx=null; selState.whole=false; }
+  else { selState.idx=sess.events.indexOf(ev); selState.whole=false; }
+  saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges();
   showToast('Pitch #'+ev.id+' '+(inzone?'(In Zone)':'(Out of Zone)')+' - '+msToToastTime(ev.timecode_ms));
 }
 if (szArea) szArea.addEventListener('click', (e)=>{ const circle=e.target.closest('.sz-circle'); if (circle){ const idx=parseInt(circle.dataset.idx,10); if(!isNaN(idx)) openOptionsModal(idx); return; } strikeZoneClick(e); });
