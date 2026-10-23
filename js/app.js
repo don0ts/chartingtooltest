@@ -1373,7 +1373,7 @@ async function pitchGroupVeloModal(ev){
     + '</div>'
     + '<div class="velo-row"><label>Velo (mph)</label><select id="velo-sel">'+veloOptions(curV)+'</select></div>'
     + '<label class="no-velo"><input type="checkbox" id="no-velo"'+(startNoVelo?' checked':'')+'/> No Velo Registered</label>';
-  const p = showModal({ title:'Pitch Group & Velo', html, buttons:[{label:'Next',value:'next',className:'btn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
+  const p = showModal({ title:'Pitch Group & Velo', html, buttons:[{label:'Next',value:'next',className:'btn',id:'pgv-next'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
   const boxes = Array.from(modalRoot.querySelectorAll('input[name=pg]'));
   boxes.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ chosen=b.value; boxes.forEach(o=>{ if(o!==b) o.checked=false; }); } else { chosen=''; } }));
   const veloSel = $('velo-sel');
@@ -1383,7 +1383,12 @@ async function pitchGroupVeloModal(ev){
   syncVelo();
   // Open with the Velo dropdown pre-selected (focused) but NOT expanded.
   if (!noVeloBox.checked){ setTimeout(()=>{ try{ veloSel.focus(); }catch(e){} }, 0); }
+  // Enter always triggers Next, even while the Velo dropdown holds focus.
+  const pgvNext = $('pgv-next');
+  function pgvOnKey(e){ if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); if(pgvNext) pgvNext.click(); } }
+  modalRoot.addEventListener('keydown', pgvOnKey);
   const res = await p;
+  modalRoot.removeEventListener('keydown', pgvOnKey);
   if (res!=='next') return null;
   if (!chosen){ const ck=modalRoot.querySelector('input[name=pg]:checked'); chosen = ck?ck.value:'FB'; }
   const velo = noVeloBox.checked ? '' : parseInt(veloSel.value,10);
@@ -1482,7 +1487,8 @@ async function contactModal(ev){
     + '</div>';
   const p = showModal({ title:'Contact', html, showBack:true, buttons:[{label:'Submit',value:'submit',className:'btn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
   const bbBtns = Array.from(modalRoot.querySelectorAll('input[name=bb]'));
-  bbBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked) bbBtns.forEach(o=>{ if(o!==b) o.checked=false; }); }));
+  const cqBtns = Array.from(modalRoot.querySelectorAll('input[name=cq]'));
+  bbBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ bbBtns.forEach(o=>{ if(o!==b) o.checked=false; }); if(b.value==='PU'){ const weak=cqBtns.find(c=>c.value==='Weak'); if(weak){ weak.checked=true; } } } }));
   const btoBtns = Array.from(modalRoot.querySelectorAll('input[name=bto]'));
   btoBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked) btoBtns.forEach(o=>{ if(o!==b) o.checked=false; }); }));
   const res = await p;
