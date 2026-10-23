@@ -473,7 +473,12 @@ function renderLog(){
     const bs = groupBS(g.pitches);
     const pcount = g.pitches.length+(g.pitches.length===1?' pitch':' pitches');
     const sub = document.createElement('div'); sub.className='play-sub'; sub.textContent = matchup+'  \u00b7  '+pcount+'  \u00b7  Balls: '+bs.balls+'  \u00b7  Strikes: '+bs.strikes;
-    head.appendChild(title); head.appendChild(sub);
+    const textCol = document.createElement('div'); textCol.className='play-head-text';
+    textCol.appendChild(title); textCol.appendChild(sub);
+    head.appendChild(textCol);
+    const headOpts = document.createElement('button'); headOpts.className='btn small play-opts'; headOpts.textContent='Options';
+    headOpts.addEventListener('click', (e)=>{ e.stopPropagation(); openPlayOptionsModal(g); });
+    head.appendChild(headOpts);
     head.addEventListener('click', ()=> selectPlay(g));
     card.appendChild(head);
     const wrap = document.createElement('div'); wrap.className='play-pitches';
@@ -531,6 +536,168 @@ async function openOptionsModal(index){
   if (res==='editplay'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; if(hh){ ev.player=hh; ev.player_id=playerIdFor(sess,hh); } if(pp){ ev.pitcher=pp; ev.pitcher_id=playerIdFor(sess,pp); } await classifyPitch(ev, ev.inzone); ev.contact = evContact(ev)?(ev.contact||1):''; ev.play = evPlayLabel(ev); ev.notes={late,early}; ev.bad_data = late?'YES_LATE':(early?'YES_EARLY':'YES_FIX'); saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
   if (res==='delete'){ const c = await showModal({ title:'Delete entry?', message:'Delete this log entry?', buttons:[{label:'Delete',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if (!c) return; sess.events.splice(index,1); selState.idx=null; selState.whole=false; saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
   if (res==='save'){ const hh=$('modal-hitter').value, pp=$('modal-pitcher').value, late=$('modal-late').checked, early=$('modal-early').checked; if(hh){ ev.player=hh; ev.player_id=playerIdFor(sess,hh); } if(pp){ ev.pitcher=pp; ev.pitcher_id=playerIdFor(sess,pp); } ev.notes={late,early}; ev.bad_data = late?'YES_LATE':(early?'YES_EARLY':'YES_FIX'); saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return; }
+}
+
+/* ===== PLAY-level options modal (edits last play + applies matchup to all pitches in the card) ===== */
+async function openPlayOptionsModal(g){
+  const sess = getCurrentSession(); if (!sess || !g || !g.pitches.length) return;
+  const last = g.pitches[g.pitches.length-1];
+  const term = last.ev; const termIdx = last.idx;
+  const allHitters = Array.from(new Set(sess.teams.top.hitters.concat(sess.teams.bot.hitters)));
+  const allPitchers = Array.from(new Set(sess.teams.top.pitchers.concat(sess.teams.bot.pitchers)));
+  const summary = [
+    'Play: '+(evPlayLabel(term)||'--'),
+    g.pitches.length+(g.pitches.length===1?' pitch':' pitches'),
+    'Matchup applies to the whole card'
+  ].join('  \u00b7  ');
+  const html = '<div style="display:flex;flex-direction:column;gap:8px">'
+    + '<div class="muted-note" style="font-size:12px;line-height:1.5">'+escapeHtml(summary)+'</div>'
+    + '<label style="font-size:13px;color:var(--muted)">Hitter (applied to all pitches in this play)</label>'
+    + '<select id="pmodal-hitter" style="padding:8px;border-radius:8px;border:1px solid var(--soft-border)">'
+    + allHitters.map(h=>'<option value="'+escapeHtml(h)+'"'+(term.player===h?' selected':'')+'>'+escapeHtml(h)+'</option>').join('')
+    + '</select>'
+    + '<label style="font-size:13px;color:var(--muted)">Pitcher (applied to all pitches in this play)</label>'
+    + '<select id="pmodal-pitcher" style="padding:8px;border-radius:8px;border:1px solid var(--soft-border)">'
+    + allPitchers.map(p=>'<option value="'+escapeHtml(p)+'"'+(term.pitcher===p?' selected':'')+'>'+escapeHtml(p)+'</option>').join('')
+    + '</select>'
+    + '<div style="display:flex;gap:10px;align-items:center;margin-top:6px">'
+    + '<label><input type="checkbox" id="pmodal-late"'+((term.notes&&term.notes.late)?' checked':'')+' /> Late Input</label>'
+    + '<label><input type="checkbox" id="pmodal-early"'+((term.notes&&term.notes.early)?' checked':'')+' /> Early Input</label>'
+    + '</div></div>';
+  const res = await showModal({ title:'Play Options', html, buttons:[{label:'Save',value:'save',className:'btn'},{label:'Edit Play',value:'editplay',className:'btn'},{label:'Delete Play',value:'delete',className:'btn warn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
+  if (res==='cancel' || !res) return;
+  if (res==='delete'){
+    const c = await showModal({ title:'Delete play?', message:'Delete all '+g.pitches.length+' pitch(es) in this play?', buttons:[{label:'Delete',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]});
+    if (!c) return;
+    const idxs = g.pitches.map(p=>p.idx).sort((a,b)=>b-a);
+    idxs.forEach(i=> sess.events.splice(i,1));
+    selState.idx=null; selState.whole=false;
+    saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return;
+  }
+  const hh=$('pmodal-hitter').value, pp=$('pmodal-pitcher').value, late=$('pmodal-late').checked, early=$('pmodal-early').checked;
+  function applyMatchup(){ g.pitches.forEach(p=>{ if(hh){ p.ev.player=hh; p.ev.player_id=playerIdFor(sess,hh); } if(pp){ p.ev.pitcher=pp; p.ev.pitcher_id=playerIdFor(sess,pp); } }); }
+  if (res==='editplay'){
+    applyMatchup();
+    await classifyPitch(term, term.inzone);
+    term.contact = evContact(term)?(term.contact||1):'';
+    term.play = evPlayLabel(term);
+    term.notes={late,early};
+    term.bad_data = late?'YES_LATE':(early?'YES_EARLY':'YES_FIX');
+    applyMatchup();
+    saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return;
+  }
+  if (res==='save'){
+    applyMatchup();
+    term.notes={late,early};
+    term.bad_data = late?'YES_LATE':(early?'YES_EARLY':'YES_FIX');
+    saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges(); return;
+  }
+}
+
+/* ===== Edit Players (Profile Manager-style) — writes to Firebase + updates lineup ===== */
+async function writePlayerDoc(id, data){
+  if(!_db) return false;
+  try{ await _db.collection(COLLECTION).doc(String(id)).set(data, {merge:true}); return true; }
+  catch(e){ console.error('player write failed', e); return false; }
+}
+// Returns true if a Players doc with this ID already exists in the database.
+async function playerExistsInDb(id){
+  if(!_db || id==='' || id==null) return false;
+  // Prefer the live cache (snapshot listener) when it has loaded.
+  if(Array.isArray(_playerCache) && _playerCache.length && _playerCache.some(pl=> String(pl.id)===String(id))) return true;
+  try{ const doc=await _db.collection(COLLECTION).doc(String(id)).get(); return !!(doc && doc.exists); }
+  catch(e){ return false; }
+}
+async function editPlayersModal(){
+  const sess=getCurrentSession(); if(!sess){ await showModal({title:'Edit Players', message:'Start or select a session first.'}); return; }
+  const hitters=Array.from(new Set(sess.teams.top.hitters.concat(sess.teams.bot.hitters)));
+  const pitchers=Array.from(new Set(sess.teams.top.pitchers.concat(sess.teams.bot.pitchers)));
+  const lineup=Array.from(new Set(pitchers.concat(hitters)));
+  const POSITIONS=['','P','C','1B','2B','3B','SS','LF','CF','RF','OF','IF','DH','UTIL'];
+  const CLASSES=['','Fr','So','Jr','Sr','GR'];
+  const BATS=['','R','L','S'];
+  const THROWS=['','R','L'];
+  const sel=(arr,cur)=>arr.map(o=>'<option value="'+escapeHtml(o)+'"'+(o===cur?' selected':'')+'>'+(o===''?'--':escapeHtml(o))+'</option>').join('');
+  const dbNote = _db? '' : '<div class="muted-note" style="color:var(--pitch-red)">Database offline — the lineup will update, but no profile is written.</div>';
+  const html='<div style="display:flex;flex-direction:column;gap:8px">'
+    + dbNote
+    + '<label style="font-size:13px;color:var(--muted)">Player</label>'
+    + '<select id="ep-player" style="padding:8px;border-radius:8px;border:1px solid var(--soft-border)">'
+    + '<option value="__new__">+ New Player</option>'
+    + lineup.map(n=>'<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>').join('')
+    + '</select>'
+    + '<div class="ep-grid">'
+    + '<label>Player Name<input id="ep-name" type="text" /></label>'
+    + '<label>Player ID<input id="ep-id" type="text" /></label>'
+    + '<label>Position<select id="ep-pos">'+sel(POSITIONS,'')+'</select></label>'
+    + '<label>Class<select id="ep-class">'+sel(CLASSES,'')+'</select></label>'
+    + '<label>Bats<select id="ep-bats">'+sel(BATS,'')+'</select></label>'
+    + '<label>Throws<select id="ep-throws">'+sel(THROWS,'')+'</select></label>'
+    + '<label>Date of Birth<input id="ep-dob" type="date" /></label>'
+    + '</div>'
+    + '<div id="ep-status" class="muted-note" style="font-size:12px"></div>'
+    + '</div>';
+  const p=showModal({ title:'Edit Players', html, buttons:[{label:'Save',value:'save',className:'btn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
+  const playerSel=$('ep-player');
+  async function fillForm(name){
+    const nameEl=$('ep-name'), idEl=$('ep-id'), posEl=$('ep-pos'), clsEl=$('ep-class'), batEl=$('ep-bats'), thrEl=$('ep-throws'), dobEl=$('ep-dob'), st=$('ep-status');
+    if(name==='__new__'){ nameEl.value=''; idEl.value=''; posEl.value=''; clsEl.value=''; batEl.value=''; thrEl.value=''; dobEl.value=''; st.textContent='Enter a new player profile.'; return; }
+    nameEl.value=name;
+    let id=playerIdFor(sess,name);
+    if(!id){ const m=_playerCache.find(pl=>pl.name && pl.name.toLowerCase()===name.toLowerCase()); if(m) id=m.id; }
+    idEl.value=id||''; posEl.value=''; clsEl.value=''; batEl.value=''; thrEl.value=''; dobEl.value='';
+    if(id && _db){ st.textContent='Loading profile\u2026';
+      try{ const doc=await _db.collection(COLLECTION).doc(String(id)).get();
+        if(doc && doc.exists){ const d=doc.data()||{};
+          posEl.value=d.position||d.pos||''; clsEl.value=d.class||d.year||d.grade||'';
+          batEl.value=(d.bats||d.bat||'').toString().charAt(0).toUpperCase(); thrEl.value=(d.throws||d.throw||'').toString().charAt(0).toUpperCase();
+          dobEl.value=d.dob||d.birthdate||d.birth_date||''; st.textContent='Loaded from database.';
+        } else { st.textContent='No database profile yet \u2014 fill and save to create.'; }
+      }catch(e){ st.textContent='Could not load profile (offline?).'; }
+    } else { st.textContent = _db? 'No ID yet \u2014 add one and save to create a profile.' : 'Database offline \u2014 lineup update only.'; }
+  }
+  playerSel.addEventListener('change', ()=>fillForm(playerSel.value));
+  fillForm(lineup.length?lineup[0]:'__new__');
+  if(lineup.length) playerSel.value=lineup[0];
+  const res=await p;
+  if(res!=='save') return;
+  const oldKey=playerSel.value;
+  const newName=$('ep-name').value.trim();
+  const id=$('ep-id').value.trim();
+  if(!newName){ await showModal({title:'Edit Players', message:'Please enter a player name.'}); return; }
+  const data={ player_name:newName, position:$('ep-pos').value, class:$('ep-class').value, bats:$('ep-bats').value, throws:$('ep-throws').value, dob:$('ep-dob').value };
+  if(id) data.player_id=id;
+  let wrote=false;
+  let alreadyInDb=false;
+  if(id && _db){
+    // If this ID already exists in the database, leave that player's
+    // profile completely untouched — only link the ID to the lineup.
+    alreadyInDb=await playerExistsInDb(id);
+    if(!alreadyInDb){ wrote=await writePlayerDoc(id, data); }
+  }
+  // lineup updates
+  if(oldKey==='__new__'){
+    const side=state.currentSide; const isP=($('ep-pos').value==='P');
+    const list=isP?sess.teams[side].pitchers:sess.teams[side].hitters;
+    if(!list.includes(newName)) list.push(newName);
+  } else if(oldKey!==newName){
+    ['top','bot'].forEach(sd=>{ const t=sess.teams[sd];
+      const ih=t.hitters.indexOf(oldKey); if(ih>=0) t.hitters[ih]=newName;
+      const ip=t.pitchers.indexOf(oldKey); if(ip>=0) t.pitchers[ip]=newName;
+      if(t.selectedPitcher===oldKey) t.selectedPitcher=newName;
+      if(t.selectedHitter===oldKey) t.selectedHitter=newName;
+    });
+    sess.events.forEach(e=>{ if(e.player===oldKey) e.player=newName; if(e.pitcher===oldKey) e.pitcher=newName; });
+    ensurePlayerIds(sess); if(sess.playerIds[oldKey]!=null) delete sess.playerIds[oldKey];
+  }
+  if(id) assignPlayerId(newName, id);
+  saveAll(); renderAll();
+  let msg;
+  if(!id){ msg='Lineup updated. Add a Player ID to save a database profile.'; }
+  else if(alreadyInDb){ msg='Player ID '+id+' already exists in the database — that profile was kept untouched and only linked to the lineup.'; }
+  else if(wrote){ msg='Saved to database and added to the lineup (ID '+id+').'; }
+  else { msg=_db?'Lineup updated, but the database write failed (try again).':'Lineup updated with ID '+id+' (database offline).'; }
+  await showModal({ title:'Edit Players', message:msg });
 }
 
 /* ===== WORKOUT: Defense rendering ===== */
@@ -1250,7 +1417,14 @@ function groupsOf(sess){
 // but must NOT bump the displayed strike count (the at-bat ends on contact).
 function groupBS(pitches){
   let balls=0, strikes=0;
-  for (const p of (pitches||[])){ const e=p.ev; if (e.ball_strike==='Ball') balls++; else if (e.ball_strike==='Strike' && e.swing!=='InPlay') strikes++; }
+  for (const p of (pitches||[])){ const e=p.ev;
+    if (e.ball_strike==='Ball'){ balls++; }
+    else if (e.ball_strike==='Strike' && e.swing!=='InPlay'){
+      // A foul with two strikes stays at two strikes (no foul strike-out).
+      if (e.swing==='Foul' && strikes>=2) continue;
+      strikes++;
+    }
+  }
   return { balls, strikes };
 }
 function displayGroup(sess){
@@ -1350,7 +1524,11 @@ function renderStrikeZone(){
   // Count balls/strikes up to the focus pitch. InPlay counts as a strike in the
   // CSV but must NOT bump the displayed strike count (an at-bat ends on contact).
   let balls=0, strikes=0;
-  for (const p of shown){ if (p.ev.ball_strike==='Ball') balls++; else if (p.ev.ball_strike==='Strike' && p.ev.swing!=='InPlay') strikes++; if (p.idx===focusIdx) break; }
+  for (const p of shown){ const e=p.ev;
+    if (e.ball_strike==='Ball') balls++;
+    else if (e.ball_strike==='Strike' && e.swing!=='InPlay'){ if(!(e.swing==='Foul' && strikes>=2)) strikes++; }
+    if (p.idx===focusIdx) break;
+  }
   if (szCount) szCount.textContent='Balls: '+balls+' \u00b7 Strikes: '+strikes;
 }
 
@@ -1442,7 +1620,10 @@ async function locationSwingModal(ev, geomInzone){
     } else { resultSect.style.display='none'; resultChecks.innerHTML=''; }
   }
   function paintSwing(){ swBtns.forEach(b=> b.classList.toggle('selected', b.getAttribute('data-sw')===swingSel)); if(swingSel==='Whiff'||swingSel==='Foul'||swingSel==='InPlay'){ bs='Strike'; } else if(!bsManual){ bs=defaultBS(); } paintBS(); renderResult(); }
-  swBtns.forEach(b=> b.addEventListener('click', ()=>{ swingSel=b.getAttribute('data-sw'); paintSwing(); }));
+  swBtns.forEach(b=> b.addEventListener('click', ()=>{ swingSel=b.getAttribute('data-sw'); paintSwing();
+    // Foul and InPlay auto-submit the step immediately (InPlay then opens the field).
+    if (swingSel==='Foul' || swingSel==='InPlay'){ const sb=modalRoot.querySelector('[data-resolve="submit"]'); if(sb) sb.click(); }
+  }));
   bsBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ bs=b.value; bsManual=true; bsBtns.forEach(o=>{ if(o!==b) o.checked=false; }); } else { bs=''; bsManual=true; } }));
   locxBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ locxBtns.forEach(o=>{ if(o!==b) o.checked=false; }); } }));
   if (swingSel){ paintSwing(); } else { paintBS(); }
@@ -1503,6 +1684,99 @@ async function confirmCancel(){
   const res = await showModal({ title:'Cancel?', message:'Are you sure you want to cancel?', buttons:[{label:'Yes',value:true,className:'btn warn'},{label:'No',value:false,className:'btn hollow'}] });
   return res===true;
 }
+const NUM_POS={'1':'P','2':'C','3':'1B','4':'2B','5':'3B','6':'SS','7':'LF','8':'CF','9':'RF'};
+const POS_NUM={P:'1',C:'2','1B':'3','2B':'4','3B':'5',SS:'6',LF:'7',CF:'8',RF:'9'};
+function buildFieldSvg(){
+  const H={x:200,y:372};
+  const pt=(deg,r)=>{const t=deg*Math.PI/180;return{x:H.x+r*Math.sin(t),y:H.y-r*Math.cos(t)};};
+  const f=n=>n.toFixed(1);
+  function sector(d1,d2,rIn,rOut){
+    const steps=Math.max(2,Math.ceil(Math.abs(d2-d1)/4));
+    const out=[],inn=[];
+    for(let i=0;i<=steps;i++){ out.push(pt(d1+(d2-d1)*i/steps,rOut)); }
+    for(let i=steps;i>=0;i--){ inn.push(pt(d1+(d2-d1)*i/steps,rIn)); }
+    const all=out.concat(inn);
+    return 'M'+all.map(p=>f(p.x)+','+f(p.y)).join(' L')+' Z';
+  }
+  const SECTIONS=[
+    {pos:'LF',d1:-45,d2:-15,rIn:150,rOut:232,cls:'fld-grass'},
+    {pos:'CF',d1:-15,d2:15,rIn:150,rOut:232,cls:'fld-grass'},
+    {pos:'RF',d1:15,d2:45,rIn:150,rOut:232,cls:'fld-grass'},
+    {pos:'3B',d1:-45,d2:-22.5,rIn:58,rOut:150,cls:'fld-dirt'},
+    {pos:'SS',d1:-22.5,d2:0,rIn:58,rOut:150,cls:'fld-dirt'},
+    {pos:'2B',d1:0,d2:22.5,rIn:58,rOut:150,cls:'fld-dirt'},
+    {pos:'1B',d1:22.5,d2:45,rIn:58,rOut:150,cls:'fld-dirt'}
+  ];
+  let svg='<svg viewBox="0 0 400 400" class="field-svg" preserveAspectRatio="xMidYMid meet">';
+  svg+='<defs><radialGradient id="grassG" cx="50%" cy="100%" r="95%"><stop offset="0%" stop-color="#3f9460"/><stop offset="100%" stop-color="#227043"/></radialGradient></defs>';
+  svg+='<rect x="0" y="0" width="400" height="400" data-pos="HR" class="fld-hr"/>';
+  svg+='<path d="'+sector(-45,45,0,232)+'" fill="url(#grassG)" pointer-events="none"/>';
+  SECTIONS.forEach(s=>{ svg+='<path class="fld-sect '+s.cls+'" data-pos="'+s.pos+'" data-num="'+POS_NUM[s.pos]+'" d="'+sector(s.d1,s.d2,s.rIn,s.rOut)+'"/>'; });
+  svg+='<path class="fld-sect fld-home" data-pos="C" data-num="2" d="'+sector(-45,45,0,58)+'"/>';
+  const m=pt(0,96); svg+='<circle class="fld-sect fld-mound" data-pos="P" data-num="1" cx="'+f(m.x)+'" cy="'+f(m.y)+'" r="30"/>';
+  const lfp=pt(-45,232), rfp=pt(45,232);
+  svg+='<line x1="'+f(H.x)+'" y1="'+f(H.y)+'" x2="'+f(lfp.x)+'" y2="'+f(lfp.y)+'" class="fld-foul" pointer-events="none"/>';
+  svg+='<line x1="'+f(H.x)+'" y1="'+f(H.y)+'" x2="'+f(rfp.x)+'" y2="'+f(rfp.y)+'" class="fld-foul" pointer-events="none"/>';
+  let fence=[]; for(let d=-45;d<=45;d+=3) fence.push(pt(d,232));
+  svg+='<polyline points="'+fence.map(p=>f(p.x)+','+f(p.y)).join(' ')+'" class="fld-fence" pointer-events="none"/>';
+  const b1=pt(45,92),b2=pt(0,130),b3=pt(-45,92);
+  svg+='<polygon points="'+f(H.x)+','+f(H.y)+' '+f(b1.x)+','+f(b1.y)+' '+f(b2.x)+','+f(b2.y)+' '+f(b3.x)+','+f(b3.y)+'" class="fld-diamond" pointer-events="none"/>';
+  SECTIONS.forEach(s=>{ const c=pt((s.d1+s.d2)/2,(s.rIn+s.rOut)/2); svg+='<text x="'+f(c.x)+'" y="'+f(c.y)+'" class="fld-lbl" pointer-events="none">'+s.pos+'</text>'; });
+  const cp=pt(0,24), pp=pt(0,96);
+  svg+='<text x="'+f(cp.x)+'" y="'+f(cp.y)+'" class="fld-lbl" pointer-events="none">C</text>';
+  svg+='<text x="'+f(pp.x)+'" y="'+f(pp.y)+'" class="fld-lbl" pointer-events="none">P</text>';
+  svg+='<text x="200" y="26" class="fld-hr-lbl" pointer-events="none">HR \u2014 outside the fence</text>';
+  svg+='</svg>';
+  return svg;
+}
+async function fieldSprayModal(ev){
+  const html='<div class="muted-note" style="margin-bottom:6px">Tap where the ball was hit. Tap outside the fence for a home run.</div>'
+    +'<div class="field-wrap">'+buildFieldSvg()+'</div>'
+    +'<button type="button" data-resolve="submit" id="field-submit-hidden" style="display:none"></button>';
+  const p=showModal({title:'Field / Spray', html, showBack:true, buttons:[{label:'Cancel',value:'cancel',className:'btn ghost'}]});
+  let fieldResult=null;
+  const wrap=modalRoot.querySelector('.field-wrap');
+  const svgEl=modalRoot.querySelector('.field-svg');
+  let popupEl=null;
+  function closePopup(){ if(popupEl){ popupEl.remove(); popupEl=null; } }
+  function openPopup(pos, num, clientX, clientY, isHR){
+    closePopup();
+    const rect=wrap.getBoundingClientRect();
+    let left=clientX-rect.left, top=clientY-rect.top;
+    popupEl=document.createElement('div'); popupEl.className='field-popup';
+    const title=isHR?'Home Run':'Hit to '+pos;
+    popupEl.innerHTML='<div class="fp-title">'+title+'</div>'
+      +'<label class="fp-row"><span>Contact Quality</span><select class="fp-cq">'+CONTACT_QUALITY.map(q=>'<option value="'+q+'"'+(q===(ev.contact_quality||'Avg')?' selected':'')+'>'+q+'</option>').join('')+'</select></label>'
+      +'<label class="fp-row"><span>Batted Ball Type</span><select class="fp-bb"><option value="">--</option>'+TRAJECTORY.map(t=>'<option value="'+t+'"'+(t===ev.batted_ball?' selected':'')+'>'+TRAJ_LABEL[t]+'</option>').join('')+'</select></label>'
+      +'<label class="fp-row"><span>Batted To</span><select class="fp-bto">'+['1','2','3','4','5','6','7','8','9'].map(n=>'<option value="'+n+'"'+(n===num?' selected':'')+'>'+n+' - '+NUM_POS[n]+'</option>').join('')+'</select></label>'
+      +'<div class="fp-actions"><button type="button" class="btn small fp-ok">Save Hit</button></div>';
+    wrap.appendChild(popupEl);
+    const pw=popupEl.offsetWidth, ph=popupEl.offsetHeight;
+    if(left+pw>rect.width) left=rect.width-pw-4; if(left<4) left=4;
+    if(top+ph>rect.height) top=rect.height-ph-4; if(top<4) top=4;
+    popupEl.style.left=left+'px'; popupEl.style.top=top+'px';
+    const bb=popupEl.querySelector('.fp-bb'), cq=popupEl.querySelector('.fp-cq');
+    bb.addEventListener('change',()=>{ if(bb.value==='PU') cq.value='Weak'; });
+    popupEl.querySelector('.fp-ok').addEventListener('click',()=>{
+      fieldResult={ contact_quality:cq.value, batted_ball:bb.value, batted_to:popupEl.querySelector('.fp-bto').value, homerun:isHR };
+      const sb=document.getElementById('field-submit-hidden'); if(sb) sb.click();
+    });
+  }
+  svgEl.addEventListener('click',(e)=>{
+    const reg=e.target.closest('[data-pos]'); if(!reg) return;
+    const pos=reg.getAttribute('data-pos'); const num=reg.getAttribute('data-num')||'';
+    if(pos==='HR'){
+      const r=svgEl.getBoundingClientRect(); const relx=(e.clientX-r.left)/r.width;
+      const hrNum= relx<0.38?'7':(relx>0.62?'9':'8');
+      openPopup('HR', hrNum, e.clientX, e.clientY, true);
+    } else { openPopup(pos, num, e.clientX, e.clientY, false); }
+  });
+  const res=await p;
+  closePopup();
+  if(res==='__back__') return '__back__';
+  if(res==='submit' && fieldResult) return fieldResult;
+  return null;
+}
 async function classifyPitch(ev, geomInzone){
   let step=0;
   while(true){
@@ -1526,10 +1800,12 @@ async function classifyPitch(ev, geomInzone){
       if(pa===null){ if(await confirmCancel()) return false; else continue; }
       ev.pa_outcome=pa; ev.play=evPlayLabel(ev); step=3;
     } else {
-      const ct = await contactModal(ev);
-      if(ct==='__back__'){ step=2; continue; }
-      if(ct===null){ if(await confirmCancel()) return false; else continue; }
-      ev.contact_quality=ct.quality; ev.batted_ball=ct.traj; ev.batted_to=ct.batted_to; return true;
+      const fld = await fieldSprayModal(ev);
+      if(fld==='__back__'){ step=2; continue; }
+      if(fld===null){ if(await confirmCancel()) return false; else continue; }
+      ev.contact_quality=fld.contact_quality; ev.batted_ball=fld.batted_ball; ev.batted_to=fld.batted_to;
+      if(fld.homerun){ ev.pa_outcome='HR'; ev.play=evPlayLabel(ev); }
+      return true;
     }
   }
 }
@@ -1541,8 +1817,8 @@ async function strikeZoneClick(e){
   if (!(await ensureClockRunningOrAsk(sess))) return;
   ensureSessionCounters(sess);
   const arect = szArea.getBoundingClientRect();
-  const px = ((e.clientX - arect.left)/arect.width)*100;
-  const py = ((e.clientY - arect.top)/arect.height)*100;
+  const px = Math.max(0, Math.min(100, ((e.clientX - arect.left)/arect.width)*100));
+  const py = Math.max(0, Math.min(100, ((e.clientY - arect.top)/arect.height)*100));
   const zrect = szZone.getBoundingClientRect();
   const r = 10;
   const nx = Math.max(zrect.left, Math.min(e.clientX, zrect.right));
@@ -1572,15 +1848,22 @@ async function strikeZoneClick(e){
   saveAll(); renderLog(); renderStrikeZone(); renderSzDesc(); updatePitcherCountBadges();
   showToast('Pitch #'+ev.id+' '+(inzone?'(In Zone)':'(Out of Zone)')+' - '+msToToastTime(ev.timecode_ms));
 }
-if (szArea) szArea.addEventListener('click', (e)=>{ const circle=e.target.closest('.sz-circle'); if (circle){ const idx=parseInt(circle.dataset.idx,10); if(!isNaN(idx)) openOptionsModal(idx); return; } strikeZoneClick(e); });
+/* The WHOLE Strike Zone card is a click target (not just the inner zone box). */
+const szCardEl = document.querySelector('.sz-card');
+if (szCardEl) szCardEl.addEventListener('click', (e)=>{
+  if (e.target.closest('button,input,select,a,textarea,label')) return;
+  const circle=e.target.closest('.sz-circle'); if (circle){ const idx=parseInt(circle.dataset.idx,10); if(!isNaN(idx)) openOptionsModal(idx); return; }
+  strikeZoneClick(e);
+});
 
 /* ===== Active Matchup quick-add (same behavior as the Players lineup add) ===== */
 const amAddPitcherInput = $('am-add-pitcher');
 const amAddPitcherBtn = $('am-add-pitcher-btn');
 const amAddHitterInput = $('am-add-hitter');
 const amAddHitterBtn = $('am-add-hitter-btn');
-if (amAddPitcherBtn) amAddPitcherBtn.addEventListener('click', ()=>{ addPlayer('pitcher', amAddPitcherInput.value); amAddPitcherInput.value=''; });
-if (amAddHitterBtn) amAddHitterBtn.addEventListener('click', ()=>{ addPlayer('hitter', amAddHitterInput.value); amAddHitterInput.value=''; });
+if (amAddPitcherBtn) amAddPitcherBtn.addEventListener('click', ()=>{ addPlayer('pitcher', amAddPitcherInput.value); amAddPitcherInput.value=''; });if (amAddHitterBtn) amAddHitterBtn.addEventListener('click', ()=>{ addPlayer('hitter', amAddHitterInput.value); amAddHitterInput.value=''; });
+const editPlayersBtn = $('edit-players-btn');
+if (editPlayersBtn) editPlayersBtn.addEventListener('click', ()=> editPlayersModal());
 if (amAddPitcherInput){
   amAddPitcherInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ amAddPitcherBtn.click(); e.preventDefault(); }});
   amAddPitcherInput.addEventListener('blur', ()=> amAddPitcherInput.value=titleCaseName(amAddPitcherInput.value));

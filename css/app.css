@@ -276,7 +276,10 @@ footer{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
 .sz-startclock{font-size:13px;font-weight:800;padding:6px 16px}
 .play-card{border:1px solid var(--soft-border);border-radius:12px;background:rgba(255,255,255,0.015);margin-bottom:10px;overflow:hidden}
 .play-card.live{border-color:rgba(79,157,255,0.45)}
-.play-head{display:flex;flex-direction:column;gap:2px;padding:9px 12px;cursor:pointer;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--soft-border)}
+.play-head{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;cursor:pointer;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--soft-border)}
+.play-head-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.play-opts{flex:0 0 auto;background:transparent;border:1px solid var(--soft-border);color:var(--muted)}
+.play-opts:hover{color:#eaf6ff;border-color:rgba(255,255,255,0.25)}
 .play-head:hover{background:rgba(255,255,255,0.05)}
 .play-head.sel{background:rgba(255,255,255,0.08)}
 .play-card.sel{border-color:rgba(255,255,255,0.55);box-shadow:0 0 0 1px rgba(255,255,255,0.35),0 0 12px 1px rgba(255,255,255,0.12)}
@@ -392,3 +395,30 @@ select option, select optgroup{background:#0b1724;color:#eaf6ff}
 .sz-circle.c-whiff{background:rgba(214,30,30,0.85);border-color:#ff3b3b}
 .sz-circle.c-foul{background:rgba(240,200,40,0.8);border-color:#f0c828}
 .sz-circle.c-inplay{background:rgba(79,157,255,0.75);border-color:#4f9dff}
+
+/* ===== Field / Spray modal ===== */
+.field-wrap{position:relative;width:100%;max-width:440px;margin:0 auto;aspect-ratio:1/1}
+.field-svg{width:100%;height:100%;display:block;border-radius:12px;background:#0d2a1b;border:1px solid var(--soft-border);touch-action:manipulation}
+.field-svg .fld-sect{cursor:pointer;stroke:rgba(255,255,255,0.28);stroke-width:1.2;transition:filter .12s ease}
+.field-svg .fld-sect:hover{filter:brightness(1.18)}
+.field-svg .fld-grass{fill:rgba(63,148,96,0.0)}
+.field-svg .fld-dirt{fill:rgba(196,138,86,0.92)}
+.field-svg .fld-home{fill:rgba(196,138,86,0.95)}
+.field-svg .fld-mound{fill:rgba(205,150,96,0.98);stroke:rgba(255,255,255,0.3)}
+.field-svg .fld-hr{fill:#0d2a1b;cursor:pointer}
+.field-svg .fld-foul{stroke:rgba(255,255,255,0.75);stroke-width:2;stroke-dasharray:2 4}
+.field-svg .fld-fence{fill:none;stroke:rgba(255,255,255,0.65);stroke-width:2.4}
+.field-svg .fld-diamond{fill:none;stroke:rgba(255,255,255,0.5);stroke-width:1.6}
+.field-svg .fld-lbl{fill:#eaf6ff;font-size:13px;font-weight:800;text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:rgba(0,0,0,0.45);stroke-width:2.5px}
+.field-svg .fld-hr-lbl{fill:rgba(255,255,255,0.55);font-size:11px;font-weight:700;text-anchor:middle}
+.field-popup{position:absolute;z-index:40;min-width:186px;background:linear-gradient(180deg,#0f2436,#0a1a28);border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:10px;box-shadow:0 14px 36px rgba(2,6,23,.65);display:flex;flex-direction:column;gap:7px}
+.field-popup .fp-title{font-size:13px;font-weight:800;color:#eaf6ff}
+.field-popup .fp-row{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)}
+.field-popup .fp-row select{padding:6px;border-radius:7px;font-size:13px}
+.field-popup .fp-actions{display:flex;justify-content:flex-end;margin-top:2px}
+
+/* ===== Edit Players modal grid ===== */
+.ep-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ep-grid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.ep-grid label:first-child,.ep-grid label:nth-child(7){grid-column:1 / -1}
+.ep-grid input,.ep-grid select{padding:8px;border-radius:8px;border:1px solid var(--soft-border)}
