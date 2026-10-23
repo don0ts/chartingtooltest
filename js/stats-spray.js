@@ -71,17 +71,18 @@ function buildSprayField(balls){
   balls.forEach(b=>{ counts[b.pos]=(counts[b.pos]||0)+1; });
   let maxC=0; Object.keys(counts).forEach(k=>{ if(counts[k]>maxC) maxC=counts[k]; });
   let svg='<svg viewBox="0 0 400 400" class="spray-svg" preserveAspectRatio="xMidYMid meet">';
-  svg+='<rect x="0" y="0" width="400" height="400" fill="#0d2a1b"/>';
-  svg+='<path d="'+fsector(-45,45,0,232)+'" fill="#2a7a4c"/>';
-  FSECTIONS.forEach(s=>{ svg+='<path class="fs-sect '+s.cls+'" d="'+fsector(s.d1,s.d2,s.rIn,s.rOut)+'"><title>'+sectTitle(s.num,counts,total)+'</title></path>'; });
+  svg+='<defs><linearGradient id="spGrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#53a96c"/><stop offset="100%" stop-color="#2f8049"/></linearGradient>'
+    +'<linearGradient id="spDirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d8ab74"/><stop offset="100%" stop-color="#bd8a53"/></linearGradient></defs>';
+  svg+='<rect x="0" y="0" width="400" height="400" fill="#15243a"/>';
+  svg+='<path d="'+fsector(-45,45,0,232)+'" fill="url(#spGrass)" pointer-events="none"/>';
+  for(let k=0;k<6;k++){ if(k%2===0){ const a1=-45+k*15; svg+='<path d="'+fsector(a1,a1+15,0,232)+'" fill="rgba(255,255,255,0.035)" pointer-events="none"/>'; } }
+  svg+='<path d="'+fsector(-45,45,224,232)+'" fill="rgba(168,120,72,0.5)" pointer-events="none"/>';
+  svg+='<path d="'+fsector(-45,45,0,150)+'" fill="url(#spDirt)" pointer-events="none"/>';
+  FSECTIONS.forEach(s=>{ svg+='<path class="fs-sect '+(s.cls==='fs-grass'?'fs-grass':'fs-dirt')+'" d="'+fsector(s.d1,s.d2,s.rIn,s.rOut)+'"><title>'+sectTitle(s.num,counts,total)+'</title></path>'; });
   svg+='<path class="fs-sect fs-home" d="'+fsector(-45,45,0,58)+'"><title>'+sectTitle('2',counts,total)+'</title></path>';
-  const m=fpt(0,96); svg+='<circle class="fs-sect fs-mound" cx="'+ff(m.x)+'" cy="'+ff(m.y)+'" r="30"><title>'+sectTitle('1',counts,total)+'</title></circle>';
-  Object.keys(counts).forEach(num=>{
-    const s=SECT_BY_NUM[num]; if(!s) return;
-    const op=(0.16+0.62*(counts[num]/(maxC||1))).toFixed(3);
-    if(num==='1'){ const c=fpt(0,96); svg+='<circle cx="'+ff(c.x)+'" cy="'+ff(c.y)+'" r="30" fill="#e23b3b" opacity="'+op+'"/>'; }
-    else svg+='<path d="'+fsector(s.d1,s.d2,s.rIn,s.rOut)+'" fill="#e23b3b" opacity="'+op+'"/>';
-  });
+  const gh=fpt(0,24),gg1=fpt(45,72),gg2=fpt(0,108),gg3=fpt(-45,72);
+  svg+='<polygon points="'+ff(gh.x)+','+ff(gh.y)+' '+ff(gg1.x)+','+ff(gg1.y)+' '+ff(gg2.x)+','+ff(gg2.y)+' '+ff(gg3.x)+','+ff(gg3.y)+'" fill="url(#spGrass)" pointer-events="none"/>';
+  const m=fpt(0,96); svg+='<circle class="fs-sect fs-mound" cx="'+ff(m.x)+'" cy="'+ff(m.y)+'" r="18"><title>'+sectTitle('1',counts,total)+'</title></circle>';
   const lfp=fpt(-45,232), rfp=fpt(45,232);
   svg+='<line x1="'+ff(FH.x)+'" y1="'+ff(FH.y)+'" x2="'+ff(lfp.x)+'" y2="'+ff(lfp.y)+'" class="fs-foul"/>';
   svg+='<line x1="'+ff(FH.x)+'" y1="'+ff(FH.y)+'" x2="'+ff(rfp.x)+'" y2="'+ff(rfp.y)+'" class="fs-foul"/>';
@@ -89,6 +90,9 @@ function buildSprayField(balls){
   svg+='<polyline points="'+fence.map(p=>ff(p.x)+','+ff(p.y)).join(' ')+'" class="fs-fence"/>';
   const b1=fpt(45,92),b2=fpt(0,130),b3=fpt(-45,92);
   svg+='<polygon points="'+ff(FH.x)+','+ff(FH.y)+' '+ff(b1.x)+','+ff(b1.y)+' '+ff(b2.x)+','+ff(b2.y)+' '+ff(b3.x)+','+ff(b3.y)+'" class="fs-diamond"/>';
+  const sbase=(b)=>'<polygon points="'+ff(b.x)+','+ff(b.y-4.5)+' '+ff(b.x+4.5)+','+ff(b.y)+' '+ff(b.x)+','+ff(b.y+4.5)+' '+ff(b.x-4.5)+','+ff(b.y)+'" class="fs-basemk"/>';
+  svg+=sbase(b1)+sbase(b2)+sbase(b3);
+  svg+='<polygon points="'+ff(FH.x)+','+ff(FH.y-5)+' '+ff(FH.x+5)+','+ff(FH.y-1)+' '+ff(FH.x+3.5)+','+ff(FH.y+5)+' '+ff(FH.x-3.5)+','+ff(FH.y+5)+' '+ff(FH.x-5)+','+ff(FH.y-1)+'" class="fs-basemk"/>';
   const perPos={};
   balls.forEach(b=>{
     const c=POS_CENT[b.pos]; const i=(perPos[b.pos]=(perPos[b.pos]||0)+1)-1;

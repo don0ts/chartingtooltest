@@ -49,6 +49,7 @@ function computeRow(evs){
   const fb=bip.filter(e=> e.batted_ball==='FB').length;
   const pu=bip.filter(e=> e.batted_ball==='PU').length;
   const hard=bip.filter(e=> e.contact_quality==='Hard').length;
+  const cqN=bip.filter(e=> e.contact_quality).length;
   const pa=evs.filter(e=> e.pa_outcome || (Array.isArray(e.result)&&e.result.length));
   const paN=pa.length;
   const hasRes=(e,f)=> Array.isArray(e.result)&&e.result.indexOf(f)>=0;
@@ -57,7 +58,7 @@ function computeRow(evs){
   const hr=pa.filter(e=> e.pa_outcome==='HR').length;
   return { events:all,
     swing:fmtPct(swings,all), chase:fmtPct(oozSw,ooz.length), izwhiff:fmtPct(izWhiff,izSw.length),
-    gb:fmtPct(gb,bN), ld:fmtPct(ld,bN), fb:fmtPct(fb,bN), pu:fmtPct(pu,bN), hard:fmtPct(hard,bN),
+    gb:fmtPct(gb,bN), ld:fmtPct(ld,bN), fb:fmtPct(fb,bN), pu:fmtPct(pu,bN), hard:fmtPct(hard,cqN),
     k:fmtPct(k,paN), bb:fmtPct(bb,paN), hr:fmtPct(hr,paN) };
 }
 

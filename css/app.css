@@ -398,14 +398,16 @@ select option, select optgroup{background:#0b1724;color:#eaf6ff}
 
 /* ===== Field / Spray modal ===== */
 .field-wrap{position:relative;width:100%;max-width:560px;margin:0 auto;aspect-ratio:424 / 460}
-.field-svg{width:100%;height:100%;display:block;border-radius:16px;background:#0d2a1b;border:1px solid var(--soft-border);box-shadow:inset 0 0 40px rgba(0,0,0,0.35),0 10px 30px rgba(0,0,0,0.4);touch-action:manipulation}
-.field-svg .fld-sect{cursor:pointer;fill:rgba(255,255,255,0);stroke:rgba(255,255,255,0.14);stroke-width:1;transition:fill .12s ease}
-.field-svg .fld-sect:hover{fill:rgba(240,250,255,0.22);stroke:rgba(255,255,255,0.55);stroke-width:1.4}
-.field-svg .fld-foul{stroke:rgba(255,255,255,0.85);stroke-width:2.2;stroke-dasharray:3 5}
-.field-svg .fld-fence{fill:none;stroke:rgba(255,255,255,0.8);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
-.field-svg .fld-diamond{fill:none;stroke:rgba(255,255,255,0.78);stroke-width:2}
-.field-svg .fld-base{fill:#f3f7fb;stroke:rgba(0,0,0,0.25);stroke-width:0.6}
-.field-svg .fld-mound{fill:#c58a54;stroke:rgba(255,255,255,0.45);stroke-width:1.2}
+.field-svg{width:100%;height:100%;display:block;border-radius:18px;background:#15243a;border:1px solid rgba(255,255,255,0.08);box-shadow:0 8px 24px rgba(0,0,0,0.28);touch-action:manipulation}
+.field-svg .fld-sect{cursor:pointer;fill:rgba(255,255,255,0);stroke:none;transition:fill .14s ease}
+.field-svg .fld-sect:hover{fill:rgba(255,255,255,0.16)}
+.field-svg .fld-foul{stroke:rgba(255,255,255,0.9);stroke-width:1.6;stroke-linecap:round}
+.field-svg .fld-fence{fill:none;stroke:rgba(255,255,255,0.85);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.field-svg .fld-grassline{stroke:rgba(255,255,255,0.14);stroke-width:1.2}
+.field-svg .fld-diamond{fill:none;stroke:rgba(255,255,255,0.72);stroke-width:1.6;stroke-linejoin:round}
+.field-svg .fld-base{fill:#ffffff;stroke:rgba(0,0,0,0.18);stroke-width:0.5}
+.field-svg .fld-mound{fill:#c8975c;stroke:rgba(255,255,255,0.3);stroke-width:0.8}
+.field-svg .fld-rubber{fill:#f4f7fb}
 .field-svg .fld-lbl{fill:#f2f8ff;font-size:14px;font-weight:800;text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:rgba(0,0,0,0.5);stroke-width:2.8px;letter-spacing:.3px}
 .field-svg .fld-lbl-sm{font-size:10px;stroke-width:2px}
 .field-svg .fld-hr-lbl{fill:rgba(236,244,255,0.7);font-size:12px;font-weight:700;text-anchor:middle}

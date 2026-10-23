@@ -27,18 +27,20 @@
 .viz-card .sub{font-size:12px;color:#7d8794;margin:-6px 0 12px}
 
 .spray-field{width:100%;max-width:440px;margin:0 auto}
-.spray-svg{width:100%;height:auto;display:block;border-radius:12px;background:#0d2a1b}
-.fs-sect{stroke:rgba(10,20,14,.55);stroke-width:1;transition:filter .12s ease,stroke .12s ease}
-.fs-sect:hover{filter:brightness(1.16);stroke:rgba(255,255,255,.75);stroke-width:1.5;cursor:help}
+.spray-svg{width:100%;height:auto;display:block;border-radius:16px;background:#15243a;border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 24px rgba(0,0,0,.28)}
+.fs-sect{fill:rgba(255,255,255,0);stroke:none;transition:fill .14s ease}
+.fs-sect:hover{fill:rgba(255,255,255,.16);cursor:help}
 .fs-dot{transition:r .1s ease}
 .fs-dot:hover{stroke:#fff;stroke-width:2;cursor:help}
-.fs-grass{fill:#2f8a56}
-.fs-dirt{fill:#b07a46}
-.fs-home{fill:#c58a54}
-.fs-mound{fill:#c58a54;stroke:rgba(10,20,14,.4)}
-.fs-diamond{fill:none;stroke:rgba(255,255,255,.55);stroke-width:2}
-.fs-foul{stroke:rgba(255,255,255,.55);stroke-width:2}
-.fs-fence{fill:none;stroke:#e8eef5;stroke-width:3;stroke-linejoin:round;opacity:.8}
+.fs-grass{fill:rgba(255,255,255,0)}
+.fs-dirt{fill:rgba(255,255,255,0)}
+.fs-home{fill:rgba(255,255,255,0)}
+.fs-mound{fill:#c8975c}
+.fs-mound:hover{fill:#e0b074;cursor:help}
+.fs-basemk{fill:#ffffff;stroke:rgba(0,0,0,.18);stroke-width:.5}
+.fs-diamond{fill:none;stroke:rgba(255,255,255,.72);stroke-width:1.6;stroke-linejoin:round}
+.fs-foul{stroke:rgba(255,255,255,.9);stroke-width:1.6;stroke-linecap:round}
+.fs-fence{fill:none;stroke:rgba(255,255,255,.85);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
 .fs-lbl{fill:#f2f6fb;font-size:12px;font-weight:700;text-anchor:middle;paint-order:stroke;
   stroke:rgba(0,0,0,.45);stroke-width:2.6px}
 .fs-pct{fill:#fff;font-size:11px;font-weight:700;text-anchor:middle;paint-order:stroke;

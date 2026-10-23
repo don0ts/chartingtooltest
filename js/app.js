@@ -1718,41 +1718,46 @@ function buildFieldSvg(){
     for(let i=steps;i>=0;i--){ inn.push(pt(d1+(d2-d1)*i/steps,rIn)); }
     return 'M'+out.concat(inn).map(p=>f(p.x)+','+f(p.y)).join(' L')+' Z';
   }
-  const DIRT_IN=40, DIRT_OUT=162, OF_IN=162, OF_OUT=FIELD_FENCE;
+  const IF_IN=24, IF_OUT=160, OF_IN=160, OF_OUT=FIELD_FENCE, ARC=158, BR1=104, BR2=147;
   const OVER=[
     {pos:'LF',d1:-45,d2:-15,rIn:OF_IN,rOut:OF_OUT},
     {pos:'CF',d1:-15,d2:15,rIn:OF_IN,rOut:OF_OUT},
     {pos:'RF',d1:15,d2:45,rIn:OF_IN,rOut:OF_OUT},
-    {pos:'3B',d1:-45,d2:-22.5,rIn:DIRT_IN,rOut:DIRT_OUT},
-    {pos:'SS',d1:-22.5,d2:0,rIn:DIRT_IN,rOut:DIRT_OUT},
-    {pos:'2B',d1:0,d2:22.5,rIn:DIRT_IN,rOut:DIRT_OUT},
-    {pos:'1B',d1:22.5,d2:45,rIn:DIRT_IN,rOut:DIRT_OUT}
+    {pos:'3B',d1:-45,d2:-22.5,rIn:IF_IN,rOut:IF_OUT},
+    {pos:'SS',d1:-22.5,d2:0,rIn:IF_IN,rOut:IF_OUT},
+    {pos:'2B',d1:0,d2:22.5,rIn:IF_IN,rOut:IF_OUT},
+    {pos:'1B',d1:22.5,d2:45,rIn:IF_IN,rOut:IF_OUT}
   ];
+  const arc=(d1,d2,r)=>{const st=Math.max(2,Math.ceil(Math.abs(d2-d1)/3));let a=[];for(let i=0;i<=st;i++)a.push(pt(d1+(d2-d1)*i/st,r));return 'M'+a.map(p=>f(p.x)+','+f(p.y)).join(' L');};
   let svg='<svg viewBox="0 0 '+FIELD_VB_W+' '+FIELD_VB_H+'" class="field-svg" preserveAspectRatio="none">';
   svg+='<defs>'
-    +'<radialGradient id="grassG" cx="50%" cy="88%" r="78%"><stop offset="0%" stop-color="#36955c"/><stop offset="58%" stop-color="#237044"/><stop offset="100%" stop-color="#13542e"/></radialGradient>'
-    +'<radialGradient id="dirtG" cx="50%" cy="76%" r="74%"><stop offset="0%" stop-color="#d7a771"/><stop offset="100%" stop-color="#a06c38"/></radialGradient>'
-    +'<linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0b2032"/><stop offset="100%" stop-color="#0d2a1b"/></linearGradient>'
+    +'<linearGradient id="grassG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#53a96c"/><stop offset="100%" stop-color="#2f8049"/></linearGradient>'
+    +'<linearGradient id="dirtG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#d8ab74"/><stop offset="100%" stop-color="#bd8a53"/></linearGradient>'
+    +'<linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0f1a2b"/><stop offset="100%" stop-color="#17263c"/></linearGradient>'
     +'</defs>';
   svg+='<rect x="0" y="0" width="'+FIELD_VB_W+'" height="'+FIELD_VB_H+'" fill="url(#skyG)" pointer-events="none"/>';
   svg+='<path d="'+sector(-45,45,0,OF_OUT)+'" fill="url(#grassG)" pointer-events="none"/>';
-  for(let k=0;k<6;k++){ if(k%2===0){ const a1=-45+k*15; svg+='<path d="'+sector(a1,a1+15,0,OF_OUT)+'" fill="rgba(255,255,255,0.045)" pointer-events="none"/>'; } }
-  svg+='<path d="'+sector(-45,45,OF_OUT-11,OF_OUT)+'" fill="rgba(176,118,68,0.55)" pointer-events="none"/>';
-  svg+='<path d="'+sector(-45,45,DIRT_IN,DIRT_OUT)+'" fill="url(#dirtG)" pointer-events="none"/>';
-  const gi1=pt(42,98),gi2=pt(0,150),gi3=pt(-42,98),gih=pt(0,22);
-  svg+='<polygon points="'+f(gih.x)+','+f(gih.y)+' '+f(gi1.x)+','+f(gi1.y)+' '+f(gi2.x)+','+f(gi2.y)+' '+f(gi3.x)+','+f(gi3.y)+'" fill="url(#grassG)" pointer-events="none"/>';
-  OVER.forEach(s=>{ svg+='<path class="fld-sect" data-pos="'+s.pos+'" data-num="'+POS_NUM[s.pos]+'" d="'+sector(s.d1,s.d2,s.rIn,s.rOut)+'"/>'; });
-  svg+='<path class="fld-sect" data-pos="C" data-num="2" d="'+sector(-45,45,0,DIRT_IN)+'"/>';
+  for(let k=0;k<6;k++){ if(k%2===0){ const a1=-45+k*15; svg+='<path d="'+sector(a1,a1+15,0,OF_OUT)+'" fill="rgba(255,255,255,0.035)" pointer-events="none"/>'; } }
+  svg+='<path d="'+sector(-45,45,OF_OUT-9,OF_OUT)+'" fill="rgba(168,120,72,0.5)" pointer-events="none"/>';
+  svg+='<path d="'+sector(-45,45,0,ARC)+'" fill="url(#dirtG)" pointer-events="none"/>';
+  const g_h=pt(0,30), g1=pt(45,88), g2=pt(0,128), g3=pt(-45,88);
+  svg+='<polygon points="'+f(g_h.x)+','+f(g_h.y)+' '+f(g1.x)+','+f(g1.y)+' '+f(g2.x)+','+f(g2.y)+' '+f(g3.x)+','+f(g3.y)+'" fill="url(#grassG)" pointer-events="none"/>';
+  svg+='<path d="'+arc(-45,45,ARC)+'" class="fld-grassline" fill="none" pointer-events="none"/>';
   const lfp=pt(-45,OF_OUT), rfp=pt(45,OF_OUT);
   svg+='<line x1="'+f(FIELD_H.x)+'" y1="'+f(FIELD_H.y)+'" x2="'+f(lfp.x)+'" y2="'+f(lfp.y)+'" class="fld-foul" pointer-events="none"/>';
   svg+='<line x1="'+f(FIELD_H.x)+'" y1="'+f(FIELD_H.y)+'" x2="'+f(rfp.x)+'" y2="'+f(rfp.y)+'" class="fld-foul" pointer-events="none"/>';
   let fence=[]; for(let d=-45;d<=45;d+=2) fence.push(pt(d,OF_OUT));
   svg+='<polyline points="'+fence.map(p=>f(p.x)+','+f(p.y)).join(' ')+'" class="fld-fence" pointer-events="none"/>';
-  const b1=pt(45,104),b2=pt(0,147),b3=pt(-45,104);
+  const b1=pt(45,BR1),b2=pt(0,BR2),b3=pt(-45,BR1);
   svg+='<polygon points="'+f(FIELD_H.x)+','+f(FIELD_H.y)+' '+f(b1.x)+','+f(b1.y)+' '+f(b2.x)+','+f(b2.y)+' '+f(b3.x)+','+f(b3.y)+'" class="fld-diamond" pointer-events="none"/>';
-  [b1,b2,b3].forEach(b=>{ svg+='<rect x="'+f(b.x-4)+'" y="'+f(b.y-4)+'" width="8" height="8" class="fld-base" pointer-events="none"/>'; });
-  svg+='<polygon points="'+f(FIELD_H.x)+','+f(FIELD_H.y-5)+' '+f(FIELD_H.x+5)+','+f(FIELD_H.y)+' '+f(FIELD_H.x+3)+','+f(FIELD_H.y+5)+' '+f(FIELD_H.x-3)+','+f(FIELD_H.y+5)+' '+f(FIELD_H.x-5)+','+f(FIELD_H.y)+'" class="fld-base" pointer-events="none"/>';
-  const m=POS_CENTERS.P; svg+='<circle class="fld-mound" cx="'+f(m.x)+'" cy="'+f(m.y)+'" r="13" pointer-events="none"/>';
+  OVER.forEach(s=>{ svg+='<path class="fld-sect" data-pos="'+s.pos+'" data-num="'+POS_NUM[s.pos]+'" d="'+sector(s.d1,s.d2,s.rIn,s.rOut)+'"/>'; });
+  svg+='<path class="fld-sect" data-pos="C" data-num="2" d="'+sector(-45,45,0,IF_IN)+'"/>';
+  const mo=POS_CENTERS.P; svg+='<circle class="fld-sect" data-pos="P" data-num="1" cx="'+f(mo.x)+'" cy="'+f(mo.y)+'" r="22"/>';
+  const base=(b)=>'<polygon points="'+f(b.x)+','+f(b.y-5)+' '+f(b.x+5)+','+f(b.y)+' '+f(b.x)+','+f(b.y+5)+' '+f(b.x-5)+','+f(b.y)+'" class="fld-base" pointer-events="none"/>';
+  svg+=base(b1)+base(b2)+base(b3);
+  svg+='<polygon points="'+f(FIELD_H.x)+','+f(FIELD_H.y-6)+' '+f(FIELD_H.x+6)+','+f(FIELD_H.y-1)+' '+f(FIELD_H.x+4)+','+f(FIELD_H.y+6)+' '+f(FIELD_H.x-4)+','+f(FIELD_H.y+6)+' '+f(FIELD_H.x-6)+','+f(FIELD_H.y-1)+'" class="fld-base" pointer-events="none"/>';
+  svg+='<circle class="fld-mound" cx="'+f(mo.x)+'" cy="'+f(mo.y)+'" r="14" pointer-events="none"/>';
+  svg+='<rect class="fld-rubber" x="'+f(mo.x-4)+'" y="'+f(mo.y-1.3)+'" width="8" height="2.6" rx="0.6" pointer-events="none"/>';
   Object.keys(POS_CENTERS).forEach(k=>{ const c=POS_CENTERS[k]; svg+='<text x="'+f(c.x)+'" y="'+f(c.y+(k==='P'?3:0))+'" class="fld-lbl'+(k==='P'?' fld-lbl-sm':'')+'" pointer-events="none">'+k+'</text>'; });
   svg+='<text x="'+(FIELD_VB_W/2)+'" y="22" class="fld-hr-lbl" pointer-events="none">Beyond the fence = Home Run</text>';
   svg+='</svg>';
