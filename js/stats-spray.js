@@ -57,6 +57,15 @@ function catColor(b){
   const c=TRAJ_CATS.find(c=> c.key===b.bb); return c?c.color:'#8a93a0';
 }
 
+function posFullName(num){
+  const map={'1':'Pitcher','2':'Catcher','3':'First Base','4':'Second Base','5':'Third Base','6':'Shortstop','7':'Left Field','8':'Center Field','9':'Right Field'};
+  return map[num]||'';
+}
+function sectTitle(num,counts,total){
+  const s=SECT_BY_NUM[num]; if(!s) return '';
+  const cnt=counts[num]||0; const pct= total? Math.round(cnt/total*100):0;
+  return esc(posFullName(num)+' ('+s.pos+') \u2014 '+cnt+' ball'+(cnt!==1?'s':'')+(total?' \u00b7 '+pct+'%':''));
+}
 function buildSprayField(balls){
   const counts={}; let total=balls.length;
   balls.forEach(b=>{ counts[b.pos]=(counts[b.pos]||0)+1; });
@@ -64,9 +73,9 @@ function buildSprayField(balls){
   let svg='<svg viewBox="0 0 400 400" class="spray-svg" preserveAspectRatio="xMidYMid meet">';
   svg+='<rect x="0" y="0" width="400" height="400" fill="#0d2a1b"/>';
   svg+='<path d="'+fsector(-45,45,0,232)+'" fill="#2a7a4c"/>';
-  FSECTIONS.forEach(s=>{ svg+='<path class="fs-sect '+s.cls+'" d="'+fsector(s.d1,s.d2,s.rIn,s.rOut)+'"/>'; });
-  svg+='<path class="fs-sect fs-home" d="'+fsector(-45,45,0,58)+'"/>';
-  const m=fpt(0,96); svg+='<circle class="fs-sect fs-mound" cx="'+ff(m.x)+'" cy="'+ff(m.y)+'" r="30"/>';
+  FSECTIONS.forEach(s=>{ svg+='<path class="fs-sect '+s.cls+'" d="'+fsector(s.d1,s.d2,s.rIn,s.rOut)+'"><title>'+sectTitle(s.num,counts,total)+'</title></path>'; });
+  svg+='<path class="fs-sect fs-home" d="'+fsector(-45,45,0,58)+'"><title>'+sectTitle('2',counts,total)+'</title></path>';
+  const m=fpt(0,96); svg+='<circle class="fs-sect fs-mound" cx="'+ff(m.x)+'" cy="'+ff(m.y)+'" r="30"><title>'+sectTitle('1',counts,total)+'</title></circle>';
   Object.keys(counts).forEach(num=>{
     const s=SECT_BY_NUM[num]; if(!s) return;
     const op=(0.16+0.62*(counts[num]/(maxC||1))).toFixed(3);
@@ -86,7 +95,9 @@ function buildSprayField(balls){
     const ring=Math.floor(i/6); const ang=(i%6)*(Math.PI/3)+ring*0.5;
     const rad=ring? (10+ring*9):(i? 9:0);
     const cx=c.x+Math.cos(ang)*rad, cy=c.y+Math.sin(ang)*rad;
-    svg+='<circle cx="'+ff(cx)+'" cy="'+ff(cy)+'" r="6" fill="'+catColor(b)+'" stroke="rgba(0,0,0,0.5)" stroke-width="1"/>';
+    const rlbl = sprayMode==='result' ? (resultCat(b.pa)? resultCat(b.pa).label : b.pa) : ((TRAJ_CATS.find(c=>c.key===b.bb)||{}).label || 'Unspecified');
+    const ttl = esc(rlbl+' \u2014 to '+(posFullName(b.pos)||('pos '+b.pos)));
+    svg+='<circle class="fs-dot" cx="'+ff(cx)+'" cy="'+ff(cy)+'" r="6" fill="'+catColor(b)+'" stroke="rgba(0,0,0,0.5)" stroke-width="1"><title>'+ttl+'</title></circle>';
   });
   FSECTIONS.concat([SECT_BY_NUM['1'],SECT_BY_NUM['2']]).forEach(s=>{
     const c = s.num==='1'?fpt(0,96):(s.num==='2'?fpt(0,30):fpt((s.d1+s.d2)/2,(s.rIn+s.rOut)/2));
@@ -117,10 +128,12 @@ function buildSprayLegend(balls){
 const QVAL={Weak:0,Bunt:0,Avg:0.5,Hard:1};
 function mix(a,b,t){ return [Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]+(b[1]-a[1])*t),Math.round(a[2]+(b[2]-a[2])*t)]; }
 function qColor(q){ if(q<=0.5){ return mix([46,110,230],[240,210,60],q/0.5); } return mix([240,210,60],[225,45,45],(q-0.5)/0.5); }
+let _heatGrid=null;
 function drawHeat(evs){
   const cv=$('heat-canvas'); if(!cv) return; let ctx; try{ ctx=cv.getContext('2d'); }catch(e){ ctx=null; } if(!ctx) return; const W=cv.width,H=cv.height;
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle='#07121b'; ctx.fillRect(0,0,W,H);
+  _heatGrid=null;
   const pts=evs.filter(e=> INPLAY_LOC.indexOf(e.pa_outcome)>=0 && e.pitch_x!=null && e.pitch_y!=null && (e.contact_quality in QVAL))
     .map(e=>({x:e.pitch_x/100*W, y:e.pitch_y/100*H, q:QVAL[e.contact_quality]}));
   if(pts.length){
@@ -148,6 +161,7 @@ function drawHeat(evs){
     }
     sctx.putImageData(img,0,0);
     ctx.imageSmoothingEnabled=true; ctx.drawImage(small,0,0,GW,GH,0,0,W,H);
+    _heatGrid={GW,GH,wsum,qsum,peak,n:pts.length};
   }
   const zx=0.28*W, zy=0.22*H, zw=0.44*W, zh=0.50*H;
   ctx.strokeStyle='rgba(230,240,255,0.85)'; ctx.lineWidth=2; ctx.strokeRect(zx,zy,zw,zh);
@@ -208,3 +222,27 @@ if(spm) spm.querySelectorAll('button').forEach(b=> b.addEventListener('click', (
 }));
 const spp=$('spray-player');
 if(spp) spp.addEventListener('change', ()=>{ sprayPlayer=spp.value; renderSpray(); });
+
+/* ---- heat-map hover tooltip ---- */
+function qLabel(q){ if(q<0.34) return 'Weak contact'; if(q<0.67) return 'Average contact'; return 'Hard contact'; }
+(function initHeatTip(){
+  const cv=$('heat-canvas'); if(!cv) return;
+  let tip=null;
+  function ensureTip(){ if(tip) return tip; tip=document.createElement('div'); tip.className='heat-tip'; (cv.parentNode||document.body).appendChild(tip); return tip; }
+  cv.addEventListener('mousemove', (ev)=>{
+    if(!_heatGrid){ if(tip) tip.style.display='none'; return; }
+    const r=cv.getBoundingClientRect();
+    const px=(ev.clientX-r.left)/r.width, py=(ev.clientY-r.top)/r.height;
+    const gx=Math.min(_heatGrid.GW-1,Math.max(0,Math.floor(px*_heatGrid.GW)));
+    const gy=Math.min(_heatGrid.GH-1,Math.max(0,Math.floor(py*_heatGrid.GH)));
+    const idx=gy*_heatGrid.GW+gx; const w=_heatGrid.wsum[idx];
+    const t=ensureTip();
+    if(w<0.04){ t.style.display='none'; return; }
+    const q=_heatGrid.qsum[idx]/w; const dens=Math.round(w/(_heatGrid.peak||1)*100);
+    t.innerHTML='<b>'+qLabel(q)+'</b><br>Density '+dens+'%';
+    t.style.display='block';
+    t.style.left=(ev.clientX-r.left+12)+'px';
+    t.style.top=(ev.clientY-r.top+12)+'px';
+  });
+  cv.addEventListener('mouseleave', ()=>{ if(tip) tip.style.display='none'; });
+})();

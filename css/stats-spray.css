@@ -28,7 +28,10 @@
 
 .spray-field{width:100%;max-width:440px;margin:0 auto}
 .spray-svg{width:100%;height:auto;display:block;border-radius:12px;background:#0d2a1b}
-.fs-sect{stroke:rgba(10,20,14,.55);stroke-width:1}
+.fs-sect{stroke:rgba(10,20,14,.55);stroke-width:1;transition:filter .12s ease,stroke .12s ease}
+.fs-sect:hover{filter:brightness(1.16);stroke:rgba(255,255,255,.75);stroke-width:1.5;cursor:help}
+.fs-dot{transition:r .1s ease}
+.fs-dot:hover{stroke:#fff;stroke-width:2;cursor:help}
 .fs-grass{fill:#2f8a56}
 .fs-dirt{fill:#b07a46}
 .fs-home{fill:#c58a54}
@@ -41,8 +44,12 @@
 .fs-pct{fill:#fff;font-size:11px;font-weight:700;text-anchor:middle;paint-order:stroke;
   stroke:rgba(0,0,0,.5);stroke-width:2.6px}
 
-.heat-wrap{display:flex;justify-content:center}
-.heat-wrap canvas{width:100%;max-width:300px;height:auto;border-radius:12px;border:1px solid #232d3b}
+.heat-wrap{display:flex;justify-content:center;position:relative}
+.heat-wrap canvas{width:100%;max-width:300px;height:auto;border-radius:12px;border:1px solid #232d3b;cursor:crosshair}
+.heat-tip{position:absolute;display:none;z-index:30;pointer-events:none;background:rgba(8,16,26,.96);
+  border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:6px 9px;font-size:12px;line-height:1.35;
+  color:#eaf6ff;box-shadow:0 10px 26px rgba(0,0,0,.5);white-space:nowrap}
+.heat-tip b{color:#9fd6ff}
 
 .viz-legend{margin-top:14px;display:flex;flex-direction:column;gap:7px}
 .lg-item{display:flex;align-items:center;gap:9px;font-size:13px;color:#cdd5df}

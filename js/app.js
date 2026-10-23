@@ -117,7 +117,20 @@ function searchPlayers(term){
 // record the Firestore id chosen for a given player name on the current session
 function ensurePlayerIds(sess){ if (sess && !sess.playerIds) sess.playerIds = {}; }
 function assignPlayerId(name, id){ const sess=getCurrentSession(); if(!sess) return; ensurePlayerIds(sess); sess.playerIds[name] = id; saveAll(); }
-function playerIdFor(sess, name){ if(!sess||!name) return ''; ensurePlayerIds(sess); return sess.playerIds[name] || ''; }
+function playerIdFor(sess, name){
+  if(!sess||!name) return '';
+  ensurePlayerIds(sess);
+  if(sess.playerIds[name]) return String(sess.playerIds[name]);
+  // Fallback: if this player (hitter OR pitcher) wasn't linked via the search
+  // dropdown, resolve their ID from the live Players database by exact name
+  // (case-insensitive) and remember it on the session so it reads reliably.
+  if(Array.isArray(_playerCache) && _playerCache.length){
+    const key=String(name).trim().toLowerCase();
+    const m=_playerCache.find(pl=> pl.name && String(pl.name).trim().toLowerCase()===key);
+    if(m && m.id!=null && m.id!==''){ sess.playerIds[name]=String(m.id); return String(m.id); }
+  }
+  return '';
+}
 
 /* attach a Firestore-backed suggestion dropdown to an add-player input.
    onPick(name, id) is called when a DB player is chosen. */
@@ -1686,92 +1699,139 @@ async function confirmCancel(){
 }
 const NUM_POS={'1':'P','2':'C','3':'1B','4':'2B','5':'3B','6':'SS','7':'LF','8':'CF','9':'RF'};
 const POS_NUM={P:'1',C:'2','1B':'3','2B':'4','3B':'5',SS:'6',LF:'7',CF:'8',RF:'9'};
+const FIELD_VB_W=424, FIELD_VB_H=460;
+const FIELD_H={x:212,y:418};
+const FIELD_FENCE=300;
+const fieldPt=(deg,r)=>{const t=deg*Math.PI/180;return{x:FIELD_H.x+r*Math.sin(t),y:FIELD_H.y-r*Math.cos(t)};};
+// On-field reference spots for every fielder (used for "closest position" clicks + labels).
+const POS_CENTERS={
+  P:fieldPt(0,72), C:fieldPt(0,30),
+  '1B':fieldPt(33.75,112), '2B':fieldPt(11.25,112), '3B':fieldPt(-33.75,112), SS:fieldPt(-11.25,112),
+  LF:fieldPt(-30,232), CF:fieldPt(0,238), RF:fieldPt(30,232)
+};
 function buildFieldSvg(){
-  const H={x:200,y:372};
-  const pt=(deg,r)=>{const t=deg*Math.PI/180;return{x:H.x+r*Math.sin(t),y:H.y-r*Math.cos(t)};};
-  const f=n=>n.toFixed(1);
+  const pt=fieldPt; const f=n=>n.toFixed(1);
   function sector(d1,d2,rIn,rOut){
-    const steps=Math.max(2,Math.ceil(Math.abs(d2-d1)/4));
+    const steps=Math.max(2,Math.ceil(Math.abs(d2-d1)/3));
     const out=[],inn=[];
     for(let i=0;i<=steps;i++){ out.push(pt(d1+(d2-d1)*i/steps,rOut)); }
     for(let i=steps;i>=0;i--){ inn.push(pt(d1+(d2-d1)*i/steps,rIn)); }
-    const all=out.concat(inn);
-    return 'M'+all.map(p=>f(p.x)+','+f(p.y)).join(' L')+' Z';
+    return 'M'+out.concat(inn).map(p=>f(p.x)+','+f(p.y)).join(' L')+' Z';
   }
-  const SECTIONS=[
-    {pos:'LF',d1:-45,d2:-15,rIn:150,rOut:232,cls:'fld-grass'},
-    {pos:'CF',d1:-15,d2:15,rIn:150,rOut:232,cls:'fld-grass'},
-    {pos:'RF',d1:15,d2:45,rIn:150,rOut:232,cls:'fld-grass'},
-    {pos:'3B',d1:-45,d2:-22.5,rIn:58,rOut:150,cls:'fld-dirt'},
-    {pos:'SS',d1:-22.5,d2:0,rIn:58,rOut:150,cls:'fld-dirt'},
-    {pos:'2B',d1:0,d2:22.5,rIn:58,rOut:150,cls:'fld-dirt'},
-    {pos:'1B',d1:22.5,d2:45,rIn:58,rOut:150,cls:'fld-dirt'}
+  const DIRT_IN=40, DIRT_OUT=162, OF_IN=162, OF_OUT=FIELD_FENCE;
+  const OVER=[
+    {pos:'LF',d1:-45,d2:-15,rIn:OF_IN,rOut:OF_OUT},
+    {pos:'CF',d1:-15,d2:15,rIn:OF_IN,rOut:OF_OUT},
+    {pos:'RF',d1:15,d2:45,rIn:OF_IN,rOut:OF_OUT},
+    {pos:'3B',d1:-45,d2:-22.5,rIn:DIRT_IN,rOut:DIRT_OUT},
+    {pos:'SS',d1:-22.5,d2:0,rIn:DIRT_IN,rOut:DIRT_OUT},
+    {pos:'2B',d1:0,d2:22.5,rIn:DIRT_IN,rOut:DIRT_OUT},
+    {pos:'1B',d1:22.5,d2:45,rIn:DIRT_IN,rOut:DIRT_OUT}
   ];
-  let svg='<svg viewBox="0 0 400 400" class="field-svg" preserveAspectRatio="xMidYMid meet">';
-  svg+='<defs><radialGradient id="grassG" cx="50%" cy="100%" r="95%"><stop offset="0%" stop-color="#3f9460"/><stop offset="100%" stop-color="#227043"/></radialGradient></defs>';
-  svg+='<rect x="0" y="0" width="400" height="400" data-pos="HR" class="fld-hr"/>';
-  svg+='<path d="'+sector(-45,45,0,232)+'" fill="url(#grassG)" pointer-events="none"/>';
-  SECTIONS.forEach(s=>{ svg+='<path class="fld-sect '+s.cls+'" data-pos="'+s.pos+'" data-num="'+POS_NUM[s.pos]+'" d="'+sector(s.d1,s.d2,s.rIn,s.rOut)+'"/>'; });
-  svg+='<path class="fld-sect fld-home" data-pos="C" data-num="2" d="'+sector(-45,45,0,58)+'"/>';
-  const m=pt(0,96); svg+='<circle class="fld-sect fld-mound" data-pos="P" data-num="1" cx="'+f(m.x)+'" cy="'+f(m.y)+'" r="30"/>';
-  const lfp=pt(-45,232), rfp=pt(45,232);
-  svg+='<line x1="'+f(H.x)+'" y1="'+f(H.y)+'" x2="'+f(lfp.x)+'" y2="'+f(lfp.y)+'" class="fld-foul" pointer-events="none"/>';
-  svg+='<line x1="'+f(H.x)+'" y1="'+f(H.y)+'" x2="'+f(rfp.x)+'" y2="'+f(rfp.y)+'" class="fld-foul" pointer-events="none"/>';
-  let fence=[]; for(let d=-45;d<=45;d+=3) fence.push(pt(d,232));
+  let svg='<svg viewBox="0 0 '+FIELD_VB_W+' '+FIELD_VB_H+'" class="field-svg" preserveAspectRatio="none">';
+  svg+='<defs>'
+    +'<radialGradient id="grassG" cx="50%" cy="88%" r="78%"><stop offset="0%" stop-color="#36955c"/><stop offset="58%" stop-color="#237044"/><stop offset="100%" stop-color="#13542e"/></radialGradient>'
+    +'<radialGradient id="dirtG" cx="50%" cy="76%" r="74%"><stop offset="0%" stop-color="#d7a771"/><stop offset="100%" stop-color="#a06c38"/></radialGradient>'
+    +'<linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0b2032"/><stop offset="100%" stop-color="#0d2a1b"/></linearGradient>'
+    +'</defs>';
+  svg+='<rect x="0" y="0" width="'+FIELD_VB_W+'" height="'+FIELD_VB_H+'" fill="url(#skyG)" pointer-events="none"/>';
+  svg+='<path d="'+sector(-45,45,0,OF_OUT)+'" fill="url(#grassG)" pointer-events="none"/>';
+  for(let k=0;k<6;k++){ if(k%2===0){ const a1=-45+k*15; svg+='<path d="'+sector(a1,a1+15,0,OF_OUT)+'" fill="rgba(255,255,255,0.045)" pointer-events="none"/>'; } }
+  svg+='<path d="'+sector(-45,45,OF_OUT-11,OF_OUT)+'" fill="rgba(176,118,68,0.55)" pointer-events="none"/>';
+  svg+='<path d="'+sector(-45,45,DIRT_IN,DIRT_OUT)+'" fill="url(#dirtG)" pointer-events="none"/>';
+  const gi1=pt(42,98),gi2=pt(0,150),gi3=pt(-42,98),gih=pt(0,22);
+  svg+='<polygon points="'+f(gih.x)+','+f(gih.y)+' '+f(gi1.x)+','+f(gi1.y)+' '+f(gi2.x)+','+f(gi2.y)+' '+f(gi3.x)+','+f(gi3.y)+'" fill="url(#grassG)" pointer-events="none"/>';
+  OVER.forEach(s=>{ svg+='<path class="fld-sect" data-pos="'+s.pos+'" data-num="'+POS_NUM[s.pos]+'" d="'+sector(s.d1,s.d2,s.rIn,s.rOut)+'"/>'; });
+  svg+='<path class="fld-sect" data-pos="C" data-num="2" d="'+sector(-45,45,0,DIRT_IN)+'"/>';
+  const lfp=pt(-45,OF_OUT), rfp=pt(45,OF_OUT);
+  svg+='<line x1="'+f(FIELD_H.x)+'" y1="'+f(FIELD_H.y)+'" x2="'+f(lfp.x)+'" y2="'+f(lfp.y)+'" class="fld-foul" pointer-events="none"/>';
+  svg+='<line x1="'+f(FIELD_H.x)+'" y1="'+f(FIELD_H.y)+'" x2="'+f(rfp.x)+'" y2="'+f(rfp.y)+'" class="fld-foul" pointer-events="none"/>';
+  let fence=[]; for(let d=-45;d<=45;d+=2) fence.push(pt(d,OF_OUT));
   svg+='<polyline points="'+fence.map(p=>f(p.x)+','+f(p.y)).join(' ')+'" class="fld-fence" pointer-events="none"/>';
-  const b1=pt(45,92),b2=pt(0,130),b3=pt(-45,92);
-  svg+='<polygon points="'+f(H.x)+','+f(H.y)+' '+f(b1.x)+','+f(b1.y)+' '+f(b2.x)+','+f(b2.y)+' '+f(b3.x)+','+f(b3.y)+'" class="fld-diamond" pointer-events="none"/>';
-  SECTIONS.forEach(s=>{ const c=pt((s.d1+s.d2)/2,(s.rIn+s.rOut)/2); svg+='<text x="'+f(c.x)+'" y="'+f(c.y)+'" class="fld-lbl" pointer-events="none">'+s.pos+'</text>'; });
-  const cp=pt(0,24), pp=pt(0,96);
-  svg+='<text x="'+f(cp.x)+'" y="'+f(cp.y)+'" class="fld-lbl" pointer-events="none">C</text>';
-  svg+='<text x="'+f(pp.x)+'" y="'+f(pp.y)+'" class="fld-lbl" pointer-events="none">P</text>';
-  svg+='<text x="200" y="26" class="fld-hr-lbl" pointer-events="none">HR \u2014 outside the fence</text>';
+  const b1=pt(45,104),b2=pt(0,147),b3=pt(-45,104);
+  svg+='<polygon points="'+f(FIELD_H.x)+','+f(FIELD_H.y)+' '+f(b1.x)+','+f(b1.y)+' '+f(b2.x)+','+f(b2.y)+' '+f(b3.x)+','+f(b3.y)+'" class="fld-diamond" pointer-events="none"/>';
+  [b1,b2,b3].forEach(b=>{ svg+='<rect x="'+f(b.x-4)+'" y="'+f(b.y-4)+'" width="8" height="8" class="fld-base" pointer-events="none"/>'; });
+  svg+='<polygon points="'+f(FIELD_H.x)+','+f(FIELD_H.y-5)+' '+f(FIELD_H.x+5)+','+f(FIELD_H.y)+' '+f(FIELD_H.x+3)+','+f(FIELD_H.y+5)+' '+f(FIELD_H.x-3)+','+f(FIELD_H.y+5)+' '+f(FIELD_H.x-5)+','+f(FIELD_H.y)+'" class="fld-base" pointer-events="none"/>';
+  const m=POS_CENTERS.P; svg+='<circle class="fld-mound" cx="'+f(m.x)+'" cy="'+f(m.y)+'" r="13" pointer-events="none"/>';
+  Object.keys(POS_CENTERS).forEach(k=>{ const c=POS_CENTERS[k]; svg+='<text x="'+f(c.x)+'" y="'+f(c.y+(k==='P'?3:0))+'" class="fld-lbl'+(k==='P'?' fld-lbl-sm':'')+'" pointer-events="none">'+k+'</text>'; });
+  svg+='<text x="'+(FIELD_VB_W/2)+'" y="22" class="fld-hr-lbl" pointer-events="none">Beyond the fence = Home Run</text>';
   svg+='</svg>';
   return svg;
 }
 async function fieldSprayModal(ev){
-  const html='<div class="muted-note" style="margin-bottom:6px">Tap where the ball was hit. Tap outside the fence for a home run.</div>'
+  const html='<div class="muted-note" style="margin-bottom:6px">Tap where the ball was hit. Behind the plate defaults to C; beyond the fence is a Home Run.</div>'
     +'<div class="field-wrap">'+buildFieldSvg()+'</div>'
     +'<button type="button" data-resolve="submit" id="field-submit-hidden" style="display:none"></button>';
   const p=showModal({title:'Field / Spray', html, showBack:true, buttons:[{label:'Cancel',value:'cancel',className:'btn ghost'}]});
   let fieldResult=null;
   const wrap=modalRoot.querySelector('.field-wrap');
   const svgEl=modalRoot.querySelector('.field-svg');
-  let popupEl=null;
+  const SVGNS='http://www.w3.org/2000/svg';
+  let popupEl=null, markerEl=null;
   function closePopup(){ if(popupEl){ popupEl.remove(); popupEl=null; } }
-  function openPopup(pos, num, clientX, clientY, isHR){
+  function placeMarker(sx,sy){
+    if(markerEl) markerEl.remove();
+    markerEl=document.createElementNS(SVGNS,'g');
+    markerEl.setAttribute('class','fld-marker'); markerEl.setAttribute('pointer-events','none');
+    const r1=document.createElementNS(SVGNS,'circle'); r1.setAttribute('cx',sx); r1.setAttribute('cy',sy); r1.setAttribute('r','9'); r1.setAttribute('class','fld-marker-ring');
+    const r2=document.createElementNS(SVGNS,'circle'); r2.setAttribute('cx',sx); r2.setAttribute('cy',sy); r2.setAttribute('r','3.4'); r2.setAttribute('class','fld-marker-dot');
+    markerEl.appendChild(r1); markerEl.appendChild(r2); svgEl.appendChild(markerEl);
+  }
+  function nearestPos(sx,sy){
+    let best=null, bd=1e12;
+    Object.keys(POS_CENTERS).forEach(k=>{ const c=POS_CENTERS[k]; const d=(c.x-sx)*(c.x-sx)+(c.y-sy)*(c.y-sy); if(d<bd){ bd=d; best=k; } });
+    return best;
+  }
+  function openPopup(pos, num, sx, sy, isHR){
     closePopup();
-    const rect=wrap.getBoundingClientRect();
-    let left=clientX-rect.left, top=clientY-rect.top;
+    const wr=wrap.getBoundingClientRect();
+    const px0=sx/FIELD_VB_W*wr.width, py0=sy/FIELD_VB_H*wr.height;
     popupEl=document.createElement('div'); popupEl.className='field-popup';
     const title=isHR?'Home Run':'Hit to '+pos;
+    const curQ=ev.contact_quality||'Avg';
     popupEl.innerHTML='<div class="fp-title">'+title+'</div>'
-      +'<label class="fp-row"><span>Contact Quality</span><select class="fp-cq">'+CONTACT_QUALITY.map(q=>'<option value="'+q+'"'+(q===(ev.contact_quality||'Avg')?' selected':'')+'>'+q+'</option>').join('')+'</select></label>'
-      +'<label class="fp-row"><span>Batted Ball Type</span><select class="fp-bb"><option value="">--</option>'+TRAJECTORY.map(t=>'<option value="'+t+'"'+(t===ev.batted_ball?' selected':'')+'>'+TRAJ_LABEL[t]+'</option>').join('')+'</select></label>'
-      +'<label class="fp-row"><span>Batted To</span><select class="fp-bto">'+['1','2','3','4','5','6','7','8','9'].map(n=>'<option value="'+n+'"'+(n===num?' selected':'')+'>'+n+' - '+NUM_POS[n]+'</option>').join('')+'</select></label>'
+      +'<div class="fp-row"><span>Contact Quality</span><div class="fp-pick fp-cq">'+CONTACT_QUALITY.map(q=>'<button type="button" class="fp-opt'+(q===curQ?' on':'')+'" data-v="'+q+'">'+q+'</button>').join('')+'</div></div>'
+      +'<div class="fp-row"><span>Batted Ball Type</span><div class="fp-pick fp-bb">'+TRAJECTORY.map(t=>'<button type="button" class="fp-opt'+(t===ev.batted_ball?' on':'')+'" data-v="'+t+'">'+t+'</button>').join('')+'</div></div>'
+      +'<div class="fp-row"><span>Batted To</span><select class="fp-bto">'+['1','2','3','4','5','6','7','8','9'].map(n=>'<option value="'+n+'"'+(n===num?' selected':'')+'>'+n+' - '+NUM_POS[n]+'</option>').join('')+'</select></div>'
       +'<div class="fp-actions"><button type="button" class="btn small fp-ok">Save Hit</button></div>';
     wrap.appendChild(popupEl);
     const pw=popupEl.offsetWidth, ph=popupEl.offsetHeight;
-    if(left+pw>rect.width) left=rect.width-pw-4; if(left<4) left=4;
-    if(top+ph>rect.height) top=rect.height-ph-4; if(top<4) top=4;
+    let left=px0+14; if(left+pw>wr.width) left=px0-pw-14; if(left<4) left=4;
+    let top=py0+14; if(top+ph>wr.height) top=wr.height-ph-4; if(top<4) top=4;
     popupEl.style.left=left+'px'; popupEl.style.top=top+'px';
-    const bb=popupEl.querySelector('.fp-bb'), cq=popupEl.querySelector('.fp-cq');
-    bb.addEventListener('change',()=>{ if(bb.value==='PU') cq.value='Weak'; });
+    let pickQ=curQ, pickBB=ev.batted_ball||'';
+    const cqWrap=popupEl.querySelector('.fp-cq'), bbWrap=popupEl.querySelector('.fp-bb');
+    function paint(wrp,val){ wrp.querySelectorAll('.fp-opt').forEach(o=>o.classList.toggle('on', o.getAttribute('data-v')===val)); }
+    cqWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ pickQ=b.getAttribute('data-v'); paint(cqWrap,pickQ); }));
+    bbWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ const v=b.getAttribute('data-v'); pickBB=(pickBB===v?'':v); paint(bbWrap,pickBB); if(pickBB==='PU'){ pickQ='Weak'; paint(cqWrap,pickQ); } }));
     popupEl.querySelector('.fp-ok').addEventListener('click',()=>{
-      fieldResult={ contact_quality:cq.value, batted_ball:bb.value, batted_to:popupEl.querySelector('.fp-bto').value, homerun:isHR };
+      fieldResult={ contact_quality:pickQ, batted_ball:pickBB, batted_to:popupEl.querySelector('.fp-bto').value, homerun:isHR };
       const sb=document.getElementById('field-submit-hidden'); if(sb) sb.click();
     });
   }
-  svgEl.addEventListener('click',(e)=>{
-    const reg=e.target.closest('[data-pos]'); if(!reg) return;
-    const pos=reg.getAttribute('data-pos'); const num=reg.getAttribute('data-num')||'';
-    if(pos==='HR'){
-      const r=svgEl.getBoundingClientRect(); const relx=(e.clientX-r.left)/r.width;
-      const hrNum= relx<0.38?'7':(relx>0.62?'9':'8');
-      openPopup('HR', hrNum, e.clientX, e.clientY, true);
-    } else { openPopup(pos, num, e.clientX, e.clientY, false); }
-  });
+  function handleClick(clientX, clientY){
+    const r=svgEl.getBoundingClientRect();
+    const sx=(clientX-r.left)/r.width*FIELD_VB_W;
+    const sy=(clientY-r.top)/r.height*FIELD_VB_H;
+    placeMarker(sx,sy);
+    const dx=sx-FIELD_H.x, up=FIELD_H.y-sy;
+    const rad=Math.hypot(dx,up);
+    const ang=Math.atan2(dx,up)*180/Math.PI;
+    if(up<=0){ openPopup('C','2',sx,sy,false); return; }               // behind the plate -> C
+    if(rad>FIELD_FENCE && Math.abs(ang)<=47){                            // beyond fence, fair -> HR
+      const hrNum= ang<-15?'7':(ang>15?'9':'8');
+      openPopup('HR',hrNum,sx,sy,true); return;
+    }
+    const pos=nearestPos(sx,sy); openPopup(pos, POS_NUM[pos]||'', sx,sy,false);
+  }
+  svgEl.addEventListener('click',(e)=>{ handleClick(e.clientX,e.clientY); });
+  function onKey(e){ if(e.key==='Escape' && popupEl){ e.stopImmediatePropagation(); e.preventDefault(); closePopup(); } }
+  function onDocDown(e){ if(popupEl && !popupEl.contains(e.target) && !svgEl.contains(e.target)){ closePopup(); } }
+  document.addEventListener('keydown', onKey, true);
+  document.addEventListener('mousedown', onDocDown, true);
   const res=await p;
+  document.removeEventListener('keydown', onKey, true);
+  document.removeEventListener('mousedown', onDocDown, true);
   closePopup();
   if(res==='__back__') return '__back__';
   if(res==='submit' && fieldResult) return fieldResult;
