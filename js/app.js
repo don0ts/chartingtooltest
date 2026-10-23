@@ -441,6 +441,10 @@ function renderLog(){
   // Keep the selection valid if events changed underneath it.
   if (selState.idx!=null && !sess.events[selState.idx]){ selState.idx=null; selState.whole=false; }
   const groups = groupsOf(sess);
+  // The single live at-bat is the trailing non-terminal group; any OTHER
+  // non-terminal group (e.g. a branched/edited pitch awaiting a result) is an
+  // unfinished at-bat, not the current one.
+  const liveGroup = (groups.length && !groups[groups.length-1].terminal) ? groups[groups.length-1] : null;
   // Pre-number terminal plays in chronological order so numbering is stable even when filtered.
   let n=0; groups.forEach(g=>{ g._playNo = g.terminal ? (++n) : null; });
   // Optional search: keep groups where any pitch matches pitcher/hitter name or ID.
@@ -465,8 +469,10 @@ function renderLog(){
     const head = document.createElement('div'); head.className='play-head'+(groupSel?' sel':'');
     const title = document.createElement('div'); title.className='play-title';
     if (g.terminal){ title.textContent = 'Play '+g._playNo+' \u00b7 '+(evPlayLabel(term)||''); }
-    else { title.textContent = 'Current At-Bat'; }
-    const sub = document.createElement('div'); sub.className='play-sub'; sub.textContent = matchup+'  \u00b7  '+g.pitches.length+(g.pitches.length===1?' pitch':' pitches');
+    else { title.textContent = (g===liveGroup) ? 'Current At-Bat' : 'At-Bat is ongoing (Unfinished)'; }
+    const bs = groupBS(g.pitches);
+    const pcount = g.pitches.length+(g.pitches.length===1?' pitch':' pitches');
+    const sub = document.createElement('div'); sub.className='play-sub'; sub.textContent = matchup+'  \u00b7  '+pcount+'  \u00b7  Balls: '+bs.balls+'  \u00b7  Strikes: '+bs.strikes;
     head.appendChild(title); head.appendChild(sub);
     head.addEventListener('click', ()=> selectPlay(g));
     card.appendChild(head);
@@ -1240,7 +1246,13 @@ function groupsOf(sess){
   if (cur.length) groups.push({pitches:cur, terminal:false});
   return groups;
 }
-// Which group to display in the strike zone: the selected one, else the live at-bat.
+// Count balls/strikes across a group's pitches. InPlay is a strike in the CSV
+// but must NOT bump the displayed strike count (the at-bat ends on contact).
+function groupBS(pitches){
+  let balls=0, strikes=0;
+  for (const p of (pitches||[])){ const e=p.ev; if (e.ball_strike==='Ball') balls++; else if (e.ball_strike==='Strike' && e.swing!=='InPlay') strikes++; }
+  return { balls, strikes };
+}
 function displayGroup(sess){
   const groups=groupsOf(sess);
   if (selState.idx!=null){
@@ -1369,6 +1381,8 @@ async function pitchGroupVeloModal(ev){
   function syncVelo(){ const off=noVeloBox.checked; veloSel.disabled=off; const vr=veloSel.closest('.velo-row'); if(vr) vr.classList.toggle('velo-disabled', off); }
   noVeloBox.addEventListener('change', syncVelo);
   syncVelo();
+  // Open with the Velo dropdown pre-selected (focused) but NOT expanded.
+  if (!noVeloBox.checked){ setTimeout(()=>{ try{ veloSel.focus(); }catch(e){} }, 0); }
   const res = await p;
   if (res!=='next') return null;
   if (!chosen){ const ck=modalRoot.querySelector('input[name=pg]:checked'); chosen = ck?ck.value:'FB'; }
