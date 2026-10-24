@@ -1705,7 +1705,7 @@ const FIELD_FENCE=300;
 const fieldPt=(deg,r)=>{const t=deg*Math.PI/180;return{x:FIELD_H.x+r*Math.sin(t),y:FIELD_H.y-r*Math.cos(t)};};
 // On-field reference spots for every fielder (used for "closest position" clicks + labels).
 const POS_CENTERS={
-  P:fieldPt(0,72), C:fieldPt(0,30),
+  P:fieldPt(0,72), C:fieldPt(0,13),
   '1B':fieldPt(33.75,112), '2B':fieldPt(11.25,112), '3B':fieldPt(-33.75,112), SS:fieldPt(-11.25,112),
   LF:fieldPt(-30,232), CF:fieldPt(0,238), RF:fieldPt(30,232)
 };

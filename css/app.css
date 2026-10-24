@@ -408,8 +408,8 @@ select option, select optgroup{background:#0b1724;color:#eaf6ff}
 .field-svg .fld-base{fill:#ffffff;stroke:rgba(0,0,0,0.18);stroke-width:0.5}
 .field-svg .fld-mound{fill:#c8975c;stroke:rgba(255,255,255,0.3);stroke-width:0.8}
 .field-svg .fld-rubber{fill:#f4f7fb}
-.field-svg .fld-lbl{fill:#f2f8ff;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;font-weight:800;text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:rgba(0,0,0,0.5);stroke-width:2.8px;letter-spacing:.3px;pointer-events:none}
-.field-svg .fld-lbl-sm{font-size:10px;stroke-width:2px}
+.field-svg .fld-lbl{fill:rgba(233,242,255,0.8);font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:10.5px;font-weight:600;text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:rgba(0,0,0,0.35);stroke-width:2px;letter-spacing:.2px;pointer-events:none}
+.field-svg .fld-lbl-sm{font-size:9px;stroke-width:1.6px}
 .field-svg .fld-hr-lbl{fill:rgba(236,244,255,0.7);font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:12px;font-weight:700;text-anchor:middle;pointer-events:none}
 .field-svg .fld-marker-ring{fill:rgba(255,255,255,0.18);stroke:#ffffff;stroke-width:2}
 .field-svg .fld-marker-dot{fill:#ff5a5a;stroke:#fff;stroke-width:1}
