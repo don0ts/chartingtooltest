@@ -1356,11 +1356,7 @@ const PITCH_GROUP_LABEL = {FB:'Fastball', BB:'Breaking Ball', OS:'OffSpeed'};
 const VELO_MIN = 60, VELO_MAX = 115;
 const LOC_OPTS = [['NonComp','Non-Competitive'],['IntBall','Intentional Ball']];
 const LOC_LABEL = {InZone:'In Zone', OutOfZone:'Out of Zone', NonComp:'Non-Competitive', IntBall:'Intentional Ball'};
-const SWING_OPTS = ['InPlay','Whiff','Take','Foul'];
 const PA_OUTCOMES = ['1B','2B','3B','HR','OUT','FC','E','DP','SAC','SACF'];
-const INPLAY_SET = ['1B','2B','3B','HR','OUT','FC','E','DP','SAC','SACF'];
-const NOCONTACT_SET = [];
-const RESULT_FLAGS = ['K','BB','HBP','iBB'];
 const CONTACT_QUALITY = ['Bunt','Weak','Avg','Hard'];
 const TRAJECTORY = ['GB','LD','FB','PU'];
 
@@ -1743,7 +1739,8 @@ async function fieldSprayModal(ev){
     const curQ=ev.contact_quality||'Avg';
     const curPA=ev.pa_outcome||'';
     const paRow=isHR?'':'<div class="fp-row"><span>PA Outcome</span><div class="fp-pick fp-pa">'+PA_OUTCOMES.map(o=>'<button type="button" class="fp-opt'+(o===curPA?' on':'')+'" data-v="'+o+'">'+o+'</button>').join('')+'</div></div>';
-    popupEl.innerHTML='<div class="fp-title">'+title+'</div>'
+    popupEl.innerHTML='<button type="button" class="fp-close" aria-label="Close">\u00d7</button>'
+      +'<div class="fp-title">'+title+'</div>'
       +paRow
       +'<div class="fp-row"><span>Contact Quality</span><div class="fp-pick fp-cq">'+CONTACT_QUALITY.map(q=>'<button type="button" class="fp-opt'+(q===curQ?' on':'')+'" data-v="'+q+'">'+q+'</button>').join('')+'</div></div>'
       +'<div class="fp-row"><span>Batted Ball Type</span><div class="fp-pick fp-bb">'+TRAJECTORY.map(t=>'<button type="button" class="fp-opt'+(t===ev.batted_ball?' on':'')+'" data-v="'+t+'">'+t+'</button>').join('')+'</div></div>'
@@ -1760,6 +1757,7 @@ async function fieldSprayModal(ev){
     if(paWrap) paWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ pickPA=b.getAttribute('data-v'); paint(paWrap,pickPA); paWrap.classList.remove('fp-needpick'); }));
     cqWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ pickQ=b.getAttribute('data-v'); paint(cqWrap,pickQ); }));
     bbWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ const v=b.getAttribute('data-v'); pickBB=(pickBB===v?'':v); paint(bbWrap,pickBB); if(pickBB==='PU'){ pickQ='Weak'; paint(cqWrap,pickQ); } }));
+    popupEl.querySelector('.fp-close').addEventListener('click',()=>{ closePopup(); });
     popupEl.querySelector('.fp-ok').addEventListener('click',()=>{
       if(!isHR && !pickPA){ if(paWrap) paWrap.classList.add('fp-needpick'); return; }
       fieldResult={ pa_outcome:(isHR?'HR':pickPA), contact_quality:pickQ, batted_ball:pickBB, batted_to:popupEl.querySelector('.fp-bto').value, homerun:isHR };
