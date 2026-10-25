@@ -218,13 +218,6 @@ function promptModal(title, initial){
   });
 }
 /* ===== option picker modal: returns chosen option string, or null if cancelled ===== */
-function pickerModal(title, options){
-  const buttons = options.map(o => ({ label:o, value:o, className:'btn' }));
-  buttons.push({ label:'Cancel', value:'__cancel__', className:'btn ghost', fullWidth:true });
-  // lay the options out in rows of 5 (e.g. 10 -> 5+5, 9 -> 5+4); Cancel gets its own full-width row
-  return showModal({ title, html:'<div class="muted-note" style="margin-bottom:2px">Choose one</div>', buttons, gridCols:5 }).then(res => (res==='__cancel__'||res==null) ? null : res);
-}
-
 const toastContainer = $('toast-container');
 function showToast(message, type){
   if (!toastContainer) return;
@@ -1023,8 +1016,6 @@ async function ensureClockRunningOrAsk(sess){
 function startClockCurrent(){ const sess=getCurrentSession(); if(!sess) return; ensureSessionClock(sess); if (sess.clock.running) return; sess.clock.running=true; sess.clock.startTimestamp=Date.now(); saveAll(); renderClockButtons(); updateClockDisplay(); }
 async function pauseClockCurrent(){ const sess=getCurrentSession(); if(!sess) return; ensureSessionClock(sess); const ok=await showModal({ title:'Pause clock', message:'Are you sure you want to pause?', buttons:[{label:'Pause',value:true,className:'btn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if(!ok) return; if (sess.clock.running && sess.clock.startTimestamp) sess.clock.elapsedBefore=computeSessionElapsedMs(sess); sess.clock.running=false; sess.clock.startTimestamp=null; saveAll(); renderClockButtons(); updateClockDisplay(); }
 async function resetClockCurrent(){ const sess=getCurrentSession(); if(!sess) return; const ok=await showModal({ title:'Reset clock', message:'Are you sure you want to reset?', buttons:[{label:'Reset',value:true,className:'btn warn'},{label:'Cancel',value:false,className:'btn ghost'}]}); if(!ok) return; sess.clock.running=false; sess.clock.elapsedBefore=0; sess.clock.startTimestamp=null; saveAll(); renderClockButtons(); updateClockDisplay(); }
-/* plain pause (no confirm) used by export flow */
-function pauseClock(){ const sess=getCurrentSession(); if(!sess) return; ensureSessionClock(sess); if (sess.clock.running && sess.clock.startTimestamp) sess.clock.elapsedBefore=computeSessionElapsedMs(sess); sess.clock.running=false; sess.clock.startTimestamp=null; saveAll(); renderClockButtons(); updateClockDisplay(); }
 /* plain reset (no confirm) used by export flow */
 function resetClock(){ const sess=getCurrentSession(); if(!sess) return; ensureSessionClock(sess); sess.clock.running=false; sess.clock.elapsedBefore=0; sess.clock.startTimestamp=null; saveAll(); renderClockButtons(); updateClockDisplay(); }
 /* floating start-clock button */
@@ -1372,9 +1363,7 @@ const NOCONTACT_SET = [];
 const RESULT_FLAGS = ['K','BB','HBP','iBB'];
 const CONTACT_QUALITY = ['Bunt','Weak','Avg','Hard'];
 const TRAJECTORY = ['GB','LD','FB','PU'];
-const TRAJ_LABEL = {GB:'Groundball', LD:'Linedrive', FB:'Flyball', PU:'Popup'};
 
-function evSwing(ev){ return ev && (ev.swing==='InPlay'||ev.swing==='Whiff'||ev.swing==='Foul'); }
 function evContact(ev){ return ev && (ev.swing==='InPlay'||ev.swing==='Foul'); }
 function evPlayLabel(ev){
   if (!ev) return '';
@@ -1391,11 +1380,6 @@ function pitchInfoStr(ev){
   if (ev.contact_quality) parts.push(ev.contact_quality);
   if (ev.batted_ball) parts.push(ev.batted_ball);
   return parts.join(' \u00b7 ');
-}
-function liveStartIndex(evs){
-  let lastPlay=-1;
-  for (let i=0;i<evs.length;i++){ if (evIsPlay(evs[i])) lastPlay=i; }
-  return lastPlay+1;
 }
 function circleClass(ev){
   if (ev.swing==='Whiff') return 'c-whiff';
@@ -1656,43 +1640,6 @@ async function locationSwingModal(ev, geomInzone){
   const resultOut = (finalSwing==='Whiff'||finalSwing==='Take') ? result : [];
   return { location:loc, swing:finalSwing, result:resultOut, ball_strike:finalBS };
 }
-async function paOutcomeModal(ev){
-  const buttons = PA_OUTCOMES.map(o => ({ label:o, value:o, className:'btn' }));
-  buttons.push({ label:'Cancel', value:'__cancel__', className:'btn ghost', fullWidth:true });
-  const res = await showModal({ title:'PA Outcome', html:'<div class="muted-note" style="margin-bottom:2px">Choose one</div>', buttons, gridCols:5, showBack:true });
-  if (res==='__back__') return '__back__';
-  return (res==='__cancel__'||res==null) ? null : res;
-}
-async function contactModal(ev){
-  const curQ = ev.contact_quality || 'Avg';
-  const curT = ev.batted_ball || '';
-  const curTo = ev.batted_to || '';
-  const html = '<div class="sect-lbl">Contact Quality</div>'
-    + '<div class="quality-checks">'
-    + CONTACT_QUALITY.map(q=>'<label><input type="radio" name="cq" value="'+q+'"'+(q===curQ?' checked':'')+'/> '+q+'</label>').join('')
-    + '</div>'
-    + '<div class="sect-lbl">Batted Ball Type</div>'
-    + '<div class="bb-checks">'
-    + TRAJECTORY.map(t=>'<label><input type="checkbox" name="bb" value="'+t+'"'+(t===curT?' checked':'')+'/> '+TRAJ_LABEL[t]+'</label>').join('')
-    + '</div>'
-    + '<div class="sect-lbl">Batted to</div>'
-    + '<div class="bto-checks">'
-    + ['1','2','3','4','5','6','7','8','9'].map(n=>'<label><input type="checkbox" name="bto" value="'+n+'"'+(n===curTo?' checked':'')+'/> '+n+'</label>').join('')
-    + '</div>';
-  const p = showModal({ title:'Contact', html, showBack:true, buttons:[{label:'Submit',value:'submit',className:'btn'},{label:'Cancel',value:'cancel',className:'btn ghost'}] });
-  const bbBtns = Array.from(modalRoot.querySelectorAll('input[name=bb]'));
-  const cqBtns = Array.from(modalRoot.querySelectorAll('input[name=cq]'));
-  bbBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked){ bbBtns.forEach(o=>{ if(o!==b) o.checked=false; }); if(b.value==='PU'){ const weak=cqBtns.find(c=>c.value==='Weak'); if(weak){ weak.checked=true; } } } }));
-  const btoBtns = Array.from(modalRoot.querySelectorAll('input[name=bto]'));
-  btoBtns.forEach(b=> b.addEventListener('change', ()=>{ if(b.checked) btoBtns.forEach(o=>{ if(o!==b) o.checked=false; }); }));
-  const res = await p;
-  if (res==='__back__') return '__back__';
-  if (res==='cancel' || res==null) return null;
-  const pickedQ = modalRoot.querySelector('input[name=cq]:checked');
-  const pickedBB = modalRoot.querySelector('input[name=bb]:checked');
-  const pickedTo = modalRoot.querySelector('input[name=bto]:checked');
-  return { quality: pickedQ?pickedQ.value:'', traj: pickedBB?pickedBB.value:'', batted_to: pickedTo?pickedTo.value:'' };
-}
 async function confirmCancel(){
   const res = await showModal({ title:'Cancel?', message:'Are you sure you want to cancel?', buttons:[{label:'Yes',value:true,className:'btn warn'},{label:'No',value:false,className:'btn hollow'}] });
   return res===true;
@@ -1794,7 +1741,10 @@ async function fieldSprayModal(ev){
     popupEl=document.createElement('div'); popupEl.className='field-popup';
     const title=isHR?'Home Run':'Hit to '+pos;
     const curQ=ev.contact_quality||'Avg';
+    const curPA=ev.pa_outcome||'';
+    const paRow=isHR?'':'<div class="fp-row"><span>PA Outcome</span><div class="fp-pick fp-pa">'+PA_OUTCOMES.map(o=>'<button type="button" class="fp-opt'+(o===curPA?' on':'')+'" data-v="'+o+'">'+o+'</button>').join('')+'</div></div>';
     popupEl.innerHTML='<div class="fp-title">'+title+'</div>'
+      +paRow
       +'<div class="fp-row"><span>Contact Quality</span><div class="fp-pick fp-cq">'+CONTACT_QUALITY.map(q=>'<button type="button" class="fp-opt'+(q===curQ?' on':'')+'" data-v="'+q+'">'+q+'</button>').join('')+'</div></div>'
       +'<div class="fp-row"><span>Batted Ball Type</span><div class="fp-pick fp-bb">'+TRAJECTORY.map(t=>'<button type="button" class="fp-opt'+(t===ev.batted_ball?' on':'')+'" data-v="'+t+'">'+t+'</button>').join('')+'</div></div>'
       +'<div class="fp-row"><span>Batted To</span><select class="fp-bto">'+['1','2','3','4','5','6','7','8','9'].map(n=>'<option value="'+n+'"'+(n===num?' selected':'')+'>'+n+' - '+NUM_POS[n]+'</option>').join('')+'</select></div>'
@@ -1804,13 +1754,15 @@ async function fieldSprayModal(ev){
     let left=px0+14; if(left+pw>wr.width) left=px0-pw-14; if(left<4) left=4;
     let top=py0+14; if(top+ph>wr.height) top=wr.height-ph-4; if(top<4) top=4;
     popupEl.style.left=left+'px'; popupEl.style.top=top+'px';
-    let pickQ=curQ, pickBB=ev.batted_ball||'';
-    const cqWrap=popupEl.querySelector('.fp-cq'), bbWrap=popupEl.querySelector('.fp-bb');
+    let pickQ=curQ, pickBB=ev.batted_ball||'', pickPA=isHR?'HR':curPA;
+    const cqWrap=popupEl.querySelector('.fp-cq'), bbWrap=popupEl.querySelector('.fp-bb'), paWrap=popupEl.querySelector('.fp-pa');
     function paint(wrp,val){ wrp.querySelectorAll('.fp-opt').forEach(o=>o.classList.toggle('on', o.getAttribute('data-v')===val)); }
+    if(paWrap) paWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ pickPA=b.getAttribute('data-v'); paint(paWrap,pickPA); paWrap.classList.remove('fp-needpick'); }));
     cqWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ pickQ=b.getAttribute('data-v'); paint(cqWrap,pickQ); }));
     bbWrap.querySelectorAll('.fp-opt').forEach(b=> b.addEventListener('click',()=>{ const v=b.getAttribute('data-v'); pickBB=(pickBB===v?'':v); paint(bbWrap,pickBB); if(pickBB==='PU'){ pickQ='Weak'; paint(cqWrap,pickQ); } }));
     popupEl.querySelector('.fp-ok').addEventListener('click',()=>{
-      fieldResult={ contact_quality:pickQ, batted_ball:pickBB, batted_to:popupEl.querySelector('.fp-bto').value, homerun:isHR };
+      if(!isHR && !pickPA){ if(paWrap) paWrap.classList.add('fp-needpick'); return; }
+      fieldResult={ pa_outcome:(isHR?'HR':pickPA), contact_quality:pickQ, batted_ball:pickBB, batted_to:popupEl.querySelector('.fp-bto').value, homerun:isHR };
       const sb=document.getElementById('field-submit-hidden'); if(sb) sb.click();
     });
   }
@@ -1859,17 +1811,13 @@ async function classifyPitch(ev, geomInzone){
       }
       if(ev.swing==='Foul'){ ev.result=[]; ev.pa_outcome=''; ev.contact_quality=''; ev.batted_ball=''; ev.batted_to=''; ev.play=evPlayLabel(ev); return true; }
       ev.result=[]; step=2;
-    } else if(step===2){
-      const pa = await paOutcomeModal(ev);
-      if(pa==='__back__'){ step=1; continue; }
-      if(pa===null){ if(await confirmCancel()) return false; else continue; }
-      ev.pa_outcome=pa; ev.play=evPlayLabel(ev); step=3;
     } else {
       const fld = await fieldSprayModal(ev);
-      if(fld==='__back__'){ step=2; continue; }
+      if(fld==='__back__'){ step=1; continue; }
       if(fld===null){ if(await confirmCancel()) return false; else continue; }
+      ev.pa_outcome = fld.homerun ? 'HR' : (fld.pa_outcome||'');
       ev.contact_quality=fld.contact_quality; ev.batted_ball=fld.batted_ball; ev.batted_to=fld.batted_to;
-      if(fld.homerun){ ev.pa_outcome='HR'; ev.play=evPlayLabel(ev); }
+      ev.play=evPlayLabel(ev);
       return true;
     }
   }

@@ -422,6 +422,7 @@ select option, select optgroup{background:#0b1724;color:#eaf6ff}
 .field-popup .fp-opt:hover{border-color:rgba(255,255,255,0.4)}
 .field-popup .fp-opt.on{background:#2a7a4c;border-color:#2a7a4c;color:#fff}
 .field-popup .fp-actions{display:flex;justify-content:flex-end;margin-top:2px}
+.field-popup .fp-pick.fp-needpick{outline:1px solid var(--contact-red,#e05a5a);outline-offset:3px;border-radius:8px}
 
 /* ===== Edit Players modal grid ===== */
 .ep-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
