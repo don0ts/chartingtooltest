@@ -1552,6 +1552,22 @@ async function pitchGroupVeloModal(ev){
   function syncVelo(){ const off=noVeloBox.checked; veloSel.disabled=off; const vr=veloSel.closest('.velo-row'); if(vr) vr.classList.toggle('velo-disabled', off); }
   noVeloBox.addEventListener('change', syncVelo);
   syncVelo();
+  // Type-ahead search: accumulate typed digits so "77" jumps straight to 77
+  // (instead of the native select cycling 70,71,72... on each repeated key).
+  let veloBuf='', veloBufTimer=null;
+  veloSel.addEventListener('keydown', function(e){
+    if(e.key>='0' && e.key<='9'){
+      e.preventDefault();
+      if(veloBufTimer) clearTimeout(veloBufTimer);
+      veloBuf += e.key;
+      let match=null;
+      for(let v=VELO_MIN; v<=VELO_MAX; v++){ if(String(v)===veloBuf){ match=v; break; } }
+      if(match==null){ for(let v=VELO_MIN; v<=VELO_MAX; v++){ if(String(v).indexOf(veloBuf)===0){ match=v; break; } } }
+      if(match==null){ veloBuf=e.key; for(let v=VELO_MIN; v<=VELO_MAX; v++){ if(String(v).indexOf(veloBuf)===0){ match=v; break; } } }
+      if(match!=null) veloSel.value=String(match);
+      veloBufTimer=setTimeout(()=>{ veloBuf=''; }, 1000);
+    }
+  });
   // Open with the Velo dropdown pre-selected (focused) but NOT expanded.
   if (!noVeloBox.checked){ setTimeout(()=>{ try{ veloSel.focus(); }catch(e){} }, 0); }
   // Enter always triggers Next, even while the Velo dropdown holds focus.
