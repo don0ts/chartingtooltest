@@ -1534,9 +1534,12 @@ function hideSzTip(){ if(_szTip) _szTip.style.display='none'; }
 
 /* ----- pitch classification pickers ----- */
 function veloOptions(sel){ let o=''; for(let v=VELO_MIN;v<=VELO_MAX;v++){ o+='<option value="'+v+'"'+(String(v)===String(sel)?' selected':'')+'>'+v+'</option>'; } return o; }
+// Remembers the most recently entered pitch group / velo so the modal
+// re-opens pre-filled with the last pitch (e.g. FB 87).
+let lastPitchGroup = 'FB', lastVelo = 85;
 async function pitchGroupVeloModal(ev){
-  let chosen = ev.pitch_group || 'FB';
-  const curV = ev.velo || 85;
+  let chosen = ev.pitch_group || lastPitchGroup || 'FB';
+  const curV = ev.velo || lastVelo || 85;
   const startNoVelo = (ev.velo==='' || ev.velo==null) && !!ev.pitch_group;
   const html = '<div class="sect-lbl">Pitch Group</div>'
     + '<div class="grp-checks">'
@@ -1579,6 +1582,9 @@ async function pitchGroupVeloModal(ev){
   if (res!=='next') return null;
   if (!chosen){ const ck=modalRoot.querySelector('input[name=pg]:checked'); chosen = ck?ck.value:'FB'; }
   const velo = noVeloBox.checked ? '' : parseInt(veloSel.value,10);
+  // Remember this pitch for the next time the modal opens.
+  lastPitchGroup = chosen;
+  if (velo !== '' && !isNaN(velo)) lastVelo = velo;
   return { group:chosen, velo:velo };
 }
 async function locationSwingModal(ev, geomInzone){
